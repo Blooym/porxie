@@ -1,0 +1,45 @@
+[package]
+name = "porxie"
+description = "A correct and efficient ATProto Blob proxy service with caching and moderation takedowns."
+authors = ["Blooym"]
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { version = "0.8.8", features = ["http2"] }
+anyhow = "1.0.102"
+clap = { version = "4.5.60", features = ["derive", "env"] }
+dotenvy = "0.15.7"
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.49.0", features = [
+    "macros",
+    "rt-multi-thread",
+    "signal",
+    "net",
+] }
+tower-http = { version = "0.6.8", features = [
+    "catch-panic",
+    "normalize-path",
+    "trace",
+    "timeout",
+] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+reqwest = { version = "0.12.27", default-features = false, features = [
+    "http2",
+    "charset",
+    "system-proxy",
+    "stream",
+    "rustls-tls",
+] }
+futures = "0.3.32"
+infer = "0.19.0"
+cid = "0.11.1"
+multihash-codetable = { version = "0.1.4", features = ["sha2", "blake3"] }
+jacquard-common = "0.9.5"
+jacquard-identity = "0.9.5"
+bytesize = { version = "2.3.1", features = ["serde"] }
+mime = "0.3.17"
+humantime = "2.3.0"
+moka = { version = "0.12.13", features = ["future", "logging"] }
+axum-extra = { version = "0.12.5", features = ["typed-header"] }
