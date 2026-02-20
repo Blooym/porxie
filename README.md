@@ -31,7 +31,7 @@ To run Porxie directly via CLI, you can simply compile and use the binary with [
    cargo install --git https://codeberg.org/Blooym/porxie.git
    ```
 
-2. Set configuration values as necessary. Information about configuration options can be found in the [configuration](#configuration) section.
+2. Set configuration values as necessary.
 
 3. Run the server
    ```sh
