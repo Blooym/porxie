@@ -72,8 +72,8 @@ struct Arguments {
 
     /// The cache-control header value to send alongside responses.
     ///
-    /// This header does not modify the internal cache lifetime of content, only what
-    /// how it wants other clients to cache responses.
+    /// This header does not modify the internal cache lifetime of content, only how it instructs
+    /// other clients to cache responses.
     #[arg(
         long = "cache-header-value",
         env = "PORXIE_CACHE_HEADER_VALUE",
@@ -86,11 +86,11 @@ struct Arguments {
     /// Content is evicted using a TinyLFU policy that automatically prioritises the most
     /// frequently requested keys.
     ///
-    /// It is recommended you deploy a dedicated caching service in front of this service for best
-    /// cache performance. The built-in cache is optimised for handling frequent requests and bursts
+    /// It is recommended you deploy a dedicated caching service in front of this service for the
+    /// best cache performance. The built-in cache is optimised for handling frequent requests and bursts
     /// requesting the same content.
     ///
-    /// The default value is conservatively low, you may wish to raise it to fit your needs.
+    /// The default value is conservatively low; you may wish to raise it to fit your needs.
     #[arg(
         long = "cache-size",
         env = "PORXIE_CACHE_SIZE",
