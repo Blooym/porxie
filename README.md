@@ -15,7 +15,123 @@ A correct and efficient ATProto Blob proxy service with caching and moderation t
 - **GET** `/did/cid` - Resolve and fetch a blob from its origin.
 - **DELETE** `/did/cid` - Invalidate blob and moderation cache for a specific blob. Requires configured bearer auth token.
 
-## Setup
+## Usage
+
+Please refer to the [configuration](#configuration) section for details on how to configure Porxie.
+
+Porxie does not handle TLS termination and should be placed behind a reverse proxy such as [Caddy](https://caddyserver.com), [Traefik](https://traefik.io/traefik), or [nginx](https://nginx.org). Ensure your reverse proxy is configured to pass through `Cache-Control` and `Content-Disposition` headers from upstream responses. Please note that if you use other intermediary services you may need to configure those to passthrough the headers as well.
+
+### Directly
+
+To run Porxie directly via CLI, you can simply compile and use the binary with [Rust and Cargo](https://rust-lang.org/tools/install/).
+
+1. Install with
+
+   ```sh
+   cargo install --git https://codeberg.org/Blooym/porxie.git
+   ```
+
+2. Set configuration values as necessary. Information about configuration options can be found in the [configuration](#configuration) section.
+
+3. Run the server
+   ```sh
+   porxie <flags>
+   ```
+
+### With Docker
+
+To run Porxie with the Docker CLI and default settings you can run the following:
+
+```sh
+docker run -d \
+  --name porxie \
+  --restart unless-stopped \
+  -p 6314:6314 \
+  ghcr.io/blooym/porxie:latest
+```
+
+### With Docker Compose
+
+To run Porxie with Docker Compose and default settings you can run the following:
+
+```yaml
+services:
+  porxie:
+    image: ghcr.io/blooym/porxie:latest
+    restart: unless-stopped
+    read_only: true
+    ports:
+      - "6314:6314"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+```
+
+<details>
+<summary>Pairing Porxie with Imgproxy for image post-processing</summary>
+
+[Imgproxy](https://imgproxy.net) can be placed in front of Porxie to handle image transformations such as resizing, cropping, and format conversions.
+
+```yaml
+services:
+  porxie:
+    image: ghcr.io/blooym/porxie:latest
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    environment:
+      PORXIE_ALLOWED_MIMETYPES: "image/*"
+      PORXIE_MAX_BLOB_SIZE: 25mb
+
+  imgproxy:
+    image: darthsim/imgproxy:latest
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    depends_on:
+      - porxie
+    environment:
+      # See https://docs.imgproxy.net/configuration/options for all options.
+      IMGPROXY_BIND: ":8080"
+      IMGPROXY_BASE_URL: "http://porxie:6314/"
+      IMGPROXY_ALLOWED_SOURCES: "http://porxie:6314/"
+      IMGPROXY_MAX_SRC_FILE_SIZE: 25000000
+      IMGPROXY_CACHE_CONTROL_PASSTHROUGH: true
+```
+
+#### Replicating cdn.bsky.app
+
+Bluesky's CDN serves images at URLs of the form:
+
+```
+https://cdn.bsky.app/img/{preset}/plain/{did}/{cid}@{format}
+```
+
+By configuring imgproxy with matching presets and enabling preset-only mode, you can use your own server with a matching url scheme which makes this a near drop-in replacement:
+
+```
+https://example.com/img/{preset}/plain/{did}/{cid}@{format}
+```
+
+You can do this by setting the following presets. Please refer to the imgproxy documentation for up to date details or guides if you wish to add more or wish to modify these
+
+```yaml
+IMGPROXY_PRESETS: >-
+  avatar=rs:fill:1000:1000:1:1/g:ce,
+  avatar_thumbnail=rs:fill:128:128:1:1/g:ce,
+  feed_thumbnail=rs:fit:0:1000,
+  feed_fullsize=rs:fit:0:0
+IMGPROXY_ONLY_PRESETS: true
+```
+
+</details>
 
 ### Configuration
 
