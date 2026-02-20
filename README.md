@@ -108,19 +108,9 @@ services:
 
 #### Replicating cdn.bsky.app
 
-Bluesky's CDN serves images at URLs of the form:
+Bluesky's CDN serves images at URLs in the form of `https://cdn.bsky.app/img/{preset}/plain/{did}/{cid}@{format}`; By configuring imgproxy with matching presets and enabling preset-only mode, you can use your own server with the same url scheme which makes this a near drop-in replacement:
 
-```
-https://cdn.bsky.app/img/{preset}/plain/{did}/{cid}@{format}
-```
-
-By configuring imgproxy with matching presets and enabling preset-only mode, you can use your own server with a matching url scheme which makes this a near drop-in replacement:
-
-```
-https://example.com/img/{preset}/plain/{did}/{cid}@{format}
-```
-
-You can do this by setting the following presets. Please refer to the imgproxy documentation for up to date details or guides if you wish to add more or wish to modify these
+To do this, set the following presets.
 
 ```yaml
 IMGPROXY_PRESETS: >-
@@ -130,6 +120,8 @@ IMGPROXY_PRESETS: >-
   feed_fullsize=rs:fit:0:0
 IMGPROXY_ONLY_PRESETS: true
 ```
+
+Please refer to the imgproxy documentation for up to date details if you wish to add more or wish to modify these. **Bluesky may change the format of their CDN at any time.**
 
 </details>
 
