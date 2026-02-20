@@ -71,7 +71,7 @@ services:
 <details>
 <summary>Pairing Porxie with Imgproxy for image post-processing</summary>
 
-[Imgproxy](https://imgproxy.net) can be placed in front of Porxie to handle image transformations such as resizing, cropping, and format conversions.
+[Imgproxy](https://imgproxy.net) can be placed in front of Porxie to handle image transformations such as resizing, cropping, and format conversions. An example configuration for this would look like this:
 
 ```yaml
 services:
