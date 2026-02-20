@@ -5,6 +5,9 @@ authors = ["Blooym"]
 version = "0.1.0"
 edition = "2024"
 
+[profile.release]
+lto = true
+
 [dependencies]
 axum = { version = "0.8.8", features = ["http2"] }
 anyhow = "1.0.102"
