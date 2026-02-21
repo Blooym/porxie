@@ -21,6 +21,8 @@ Please refer to the [configuration](#configuration) section for details on how t
 
 Porxie does not handle TLS termination and should be placed behind a reverse proxy such as [Caddy](https://caddyserver.com), [Traefik](https://traefik.io/traefik), or [nginx](https://nginx.org). Ensure your reverse proxy is configured to pass through `Cache-Control` and `Content-Disposition` headers from upstream responses. Please note that if you use other intermediary services you may need to configure those to pass through the headers as well.
 
+Additionally, it is recommended you setup a CDN layer infront of Porxie (or any processing services you put infront of it instead) that can handle long-term global caching. You may also wish to run Porxie in several locations worldwide.
+
 ### Directly
 
 To run Porxie directly via CLI, you can simply compile and use the binary with [Rust and Cargo](https://rust-lang.org/tools/install/).
