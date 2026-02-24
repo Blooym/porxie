@@ -13,14 +13,14 @@ pub fn build_internal_http_client() -> Result<reqwest::Client, reqwest::Error> {
 
 pub fn build_external_http_client(
     https_only: bool,
-    upstream_timeout: Duration,
+    timeout: Duration,
     proxy_url: Option<Url>,
 ) -> Result<reqwest::Client, reqwest::Error> {
     let mut builder = reqwest::Client::builder()
         .user_agent(USER_AGENT)
         .https_only(https_only)
         .redirect(Policy::limited(MAX_REDIRECTS))
-        .timeout(upstream_timeout);
+        .timeout(timeout);
 
     if let Some(proxy) = proxy_url {
         builder = builder.proxy(Proxy::all(proxy)?);

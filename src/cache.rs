@@ -1,20 +1,15 @@
 use axum::{body::Bytes, http::HeaderMap};
 use cid::Cid;
+use jacquard_common::types::did::Did;
 use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 pub type ResponseCache = MokaCache<Cid, CachedResponse>;
-pub type ModerationCache = MokaCache<(String, Cid), CachedModerationResponse>;
 
 #[derive(Debug, Clone)]
 pub struct CachedResponse {
     pub body: Bytes,
-    pub headers: Arc<HeaderMap>,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct CachedModerationResponse {
-    pub takendown: bool,
+    pub headers: HeaderMap,
 }
 
 pub fn build_response_cache(max_capacity: u64) -> ResponseCache {
@@ -27,6 +22,13 @@ pub fn build_response_cache(max_capacity: u64) -> ResponseCache {
         .eviction_policy(EvictionPolicy::tiny_lfu())
         .max_capacity(max_capacity)
         .build()
+}
+
+pub type ModerationCache = MokaCache<(Did<'static>, Cid), CachedModerationAction>;
+
+#[derive(Debug, Copy, Clone)]
+pub struct CachedModerationAction {
+    pub can_serve: bool,
 }
 
 pub fn build_moderation_cache(max_capacity: u64, ttl: Duration) -> ModerationCache {

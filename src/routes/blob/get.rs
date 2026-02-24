@@ -1,0 +1,270 @@
+use crate::{
+    AppState,
+    cache::{CachedModerationAction, CachedResponse},
+    mime::is_mime_allowed,
+};
+use anyhow::bail;
+use axum::{
+    body::{Body, Bytes},
+    extract::{Path, State},
+    http::{HeaderMap, HeaderValue, Response, StatusCode, header},
+};
+use cid::Cid;
+use futures::StreamExt;
+use jacquard_common::types::did::Did;
+use jacquard_identity::resolver::IdentityResolver;
+use mime::Mime;
+use multihash_codetable::{Code, MultihashDigest};
+use std::sync::Arc;
+use tracing::{debug, error, info, warn};
+
+#[derive(Debug, Copy, Clone)]
+enum BlobFetchError {
+    PdsResolutionFailed,
+    PdsFetchFailed,
+    BlobNotFound,
+    PdsErrorResponse,
+    BlobTooLarge,
+    BlobStreamFailed,
+    UnsupportedMultihash,
+    CidMismatch,
+    DisallowedMimeType,
+}
+
+pub async fn get_blob_handler(
+    Path((did, cid)): Path<(String, String)>,
+    State(state): State<Arc<AppState>>,
+) -> Result<axum::response::Response, (StatusCode, &'static str)> {
+    let (did, cid) = (
+        match Did::new_owned(did) {
+            Ok(did) => did,
+            Err(_) => {
+                return Err((
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "Invalid or unprocessable DID",
+                ));
+            }
+        },
+        match Cid::try_from(cid) {
+            Ok(cid) => cid,
+            Err(_) => {
+                return Err((
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "Invalid or unprocessable CID",
+                ));
+            }
+        },
+    );
+
+    // Query moderation service (if set) to see if the blob can be served.
+    //
+    // Moderation queries will be made if needed, even when blob itself is cached.
+    // All moderation queries will be cached for a duration to prevent flooding the upstream.
+    if let Some(ref moderation_service_url) = state.moderation_service_url {
+        match state
+            .moderation_cache
+            .try_get_with_by_ref(&(did.clone(), cid), async {
+                let mut moderation_service_url = moderation_service_url.clone();
+                moderation_service_url
+                    .path_segments_mut()
+                    .expect("moderation service URL cannot be a base")
+                    .push(did.as_str())
+                    .push(&cid.to_string());
+                let mut request = state.internal_http_client.get(moderation_service_url);
+                if let Some(ref auth) = state.moderation_service_auth_header {
+                    request = request.header(reqwest::header::AUTHORIZATION, auth);
+                }
+                match request.send().await {
+                    Ok(response) => match response.status() {
+                        StatusCode::OK => Ok(CachedModerationAction { can_serve: true }),
+                        StatusCode::GONE => {
+                            info!("moderation service rejected blob {cid} for {did}");
+                            Ok(CachedModerationAction { can_serve: false })
+                        }
+                        status => {
+                            error!("moderation service returned unexpected status: {status}");
+                            bail!("unexpected status code: {status}");
+                        }
+                    },
+                    Err(err) => {
+                        error!("error occured with the moderation service: {err:?}");
+                        Err(err.into())
+                    }
+                }
+            })
+            .await
+        {
+            Ok(mod_state) if !mod_state.can_serve => {
+                return Err((
+                    StatusCode::GONE,
+                    "Content is not available through this service",
+                ));
+            }
+            Err(_) if !state.moderation_service_fail_open => {
+                return Err((StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"));
+            }
+            _ => {}
+        }
+    }
+
+    // Fetch the blob from source or cache. Concurrent requests for the same CID are combined.
+    // Failures will not be not cached, subsequent requests will always retry.
+    match state
+        .response_cache
+        .try_get_with_by_ref(&cid, {
+            async {
+                // Lookup PDS for the DID and return the PDS & Blob URL.
+                let blob_url = {
+                    let mut url = state.resolver.pds_for_did(&did).await.map_err(|err| {
+                        warn!("failed to resolve PDS url for '{did}': {err:?}");
+                        BlobFetchError::PdsResolutionFailed
+                    })?;
+                    url.set_path("/xrpc/com.atproto.sync.getBlob");
+                    url.set_query(Some(&format!("did={did}&cid={cid}")));
+                    url
+                };
+
+                // Fetch and validate the requested blob.
+                let blob_bytes = {
+                    // Request the blob from the PDS.
+                    let response = state
+                        .external_http_client
+                        .get(blob_url)
+                        .send()
+                        .await
+                        .map_err(|err| {
+                            error!("failed to fetch blob from PDS: {err:?}");
+                            BlobFetchError::PdsFetchFailed
+                        })?;
+
+                    if matches!(
+                        response.status(),
+                        StatusCode::NOT_FOUND | StatusCode::BAD_REQUEST
+                    ) {
+                        debug!("PDS returned 404 for blob {cid} on {did}");
+                        return Err(BlobFetchError::BlobNotFound);
+                    }
+                    if !response.status().is_success() {
+                        warn!("PDS returned error status: {}", response.status());
+                        return Err(BlobFetchError::PdsErrorResponse);
+                    }
+
+                    // Validate the size of the body making a guess based the inferred size.
+                    // This is strictly validated later when downloading.
+                    if let Some(content_length) = response.content_length()
+                        && content_length > state.max_blob_size
+                    {
+                        debug!("blob exceeds max size of {} bytes", state.max_blob_size);
+                        return Err(BlobFetchError::BlobTooLarge);
+                    };
+
+                    // Incrementally download blob and abort if too large.
+                    let mut buffer = Vec::with_capacity(
+                        response
+                            .content_length()
+                            .unwrap_or(64 * 1024)
+                            .min(state.max_blob_size) as usize,
+                    );
+                    let mut stream = response.bytes_stream();
+                    while let Some(chunk) = stream.next().await {
+                        let chunk = chunk.map_err(|err| {
+                            warn!("error reading blob stream: {err:?}");
+                            BlobFetchError::BlobStreamFailed
+                        })?;
+                        if (buffer.len() + chunk.len()) as u64 > state.max_blob_size {
+                            debug!("blob exceeds max size of {} bytes", state.max_blob_size);
+                            return Err(BlobFetchError::BlobTooLarge);
+                        }
+                        buffer.extend_from_slice(&chunk);
+                    }
+
+                    // Compute the blob CID and ensure it matches with the CID hash from the request.
+                    let computed_cid = match cid.hash().code() {
+                        0x12 => Cid::new_v1(0x55, Code::Sha2_256.digest(&buffer)),
+                        0x1e => Cid::new_v1(0x55, Code::Blake3_256.digest(&buffer)),
+                        hash => {
+                            warn!("unsupported multihash: 0x{hash:x}");
+                            return Err(BlobFetchError::UnsupportedMultihash);
+                        }
+                    };
+                    if computed_cid != cid {
+                        warn!("CID mismatch: expected {cid}, computed {computed_cid}");
+                        return Err(BlobFetchError::CidMismatch);
+                    }
+
+                    buffer
+                };
+
+                // Loosely determine and validate mimetype. Not a strict check, may need future improvement.
+                let mime_type: Mime = match infer::get(&blob_bytes) {
+                    Some(m) => m
+                        .mime_type()
+                        .parse()
+                        .expect("infer mimetype should always be valid"),
+                    None => mime::APPLICATION_OCTET_STREAM,
+                };
+                if !is_mime_allowed(&mime_type, &state.allowed_mimetypes) {
+                    debug!("blob was inferred to be a disallowed mime type: {mime_type}");
+                    return Err(BlobFetchError::DisallowedMimeType);
+                }
+
+                // Build response.
+                let body = Bytes::from(blob_bytes);
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    header::CONTENT_TYPE,
+                    mime_type
+                        .essence_str()
+                        .parse()
+                        .expect("should parse mime type as header value"),
+                );
+                headers.insert(
+                    header::CONTENT_SECURITY_POLICY,
+                    HeaderValue::from_static("default-src 'none'; sandbox"),
+                );
+                headers.insert(
+                    header::X_CONTENT_TYPE_OPTIONS,
+                    HeaderValue::from_static("nosniff"),
+                );
+                headers.insert(header::CACHE_CONTROL, state.cache_control_header.clone());
+                Ok(CachedResponse { body, headers })
+            }
+        })
+        .await
+    {
+        Ok(blob) => {
+            let mut response = Response::builder()
+                .status(StatusCode::OK)
+                .body(Body::from(blob.body))
+                .expect("should build valid response");
+            response.headers_mut().extend(blob.headers);
+            Ok(response)
+        }
+        Err(err) => Err(match *err {
+            BlobFetchError::PdsResolutionFailed => {
+                (StatusCode::BAD_GATEWAY, "Failed to resolve PDS for DID")
+            }
+            BlobFetchError::PdsFetchFailed
+            | BlobFetchError::PdsErrorResponse
+            | BlobFetchError::BlobStreamFailed => {
+                (StatusCode::BAD_GATEWAY, "Failed to fetch blob from PDS")
+            }
+            BlobFetchError::BlobNotFound => (StatusCode::NOT_FOUND, "Not found"),
+            BlobFetchError::BlobTooLarge => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Blob exceeds maximum allowed size",
+            ),
+            BlobFetchError::UnsupportedMultihash => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Unsupported CID multihash",
+            ),
+            BlobFetchError::CidMismatch => {
+                (StatusCode::BAD_GATEWAY, "Blob content does not match CID")
+            }
+            BlobFetchError::DisallowedMimeType => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Content type is not allowed",
+            ),
+        }),
+    }
+}

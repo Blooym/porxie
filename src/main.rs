@@ -108,17 +108,17 @@ struct Arguments {
     )]
     max_blob_size: ByteSize,
 
-    /// Maximum size of cached moderation responses in memory.
+    /// Maximum size of cached moderation actions in memory.
     ///
     /// Each entry is lightweight, so small allocations can hold a large number of entries.
     #[arg(
         long = "moderation-cache-size",
         env = "PORXIE_MODERATION_CACHE_SIZE",
-        default_value = "128mb"
+        default_value = "256mb"
     )]
     moderation_cache_size: ByteSize,
 
-    /// How long moderation responses are cached before being re-checked.
+    /// How long moderation actions are cached before being invalidated.
     #[arg(
         long = "moderation-cache-ttl",
         env = "PORXIE_MODERATION_CACHE_TTL",
@@ -126,10 +126,11 @@ struct Arguments {
     )]
     moderation_cache_ttl: humantime::Duration,
 
-    /// Bearer auth token sent with all requests to the moderation service.
+    /// Authorization bearer token header value sent alongside all requests to the moderation service.
     #[arg(
         long = "moderation-service-auth-token",
-        env = "PORXIE_MODERATION_SERVICE_AUTH_TOKEN"
+        env = "PORXIE_MODERATION_SERVICE_AUTH_TOKEN",
+        requires = "moderation_service_url"
     )]
     moderation_service_auth_token: Option<String>,
 
@@ -138,7 +139,8 @@ struct Arguments {
     #[arg(
         long = "moderation-service-fail-open",
         env = "PORXIE_MODERATION_SERVICE_FAIL_OPEN",
-        default_value_t = false
+        default_value_t = false,
+        requires = "moderation_service_url"
     )]
     moderation_service_fail_open: core::primitive::bool,
 
@@ -146,7 +148,7 @@ struct Arguments {
     ///
     /// Requests are sent as HTTP GET <url>/<did>/<cid>.
     ///
-    /// The service is expected to return HTTP 200 if permitted or HTTP 410 if taken down.
+    /// The service is expected to return HTTP 200 (OK) if permitted or HTTP 410 (GONE) if restricted.
     #[arg(long = "moderation-service-url", env = "PORXIE_MODERATION_SERVICE_URL")]
     moderation_service_url: Option<Url>,
 
@@ -162,7 +164,7 @@ struct Arguments {
 
     /// Only allow HTTPS when connecting to upstreams.
     ///
-    /// Disabling this is strongly discouraged outside of local development.
+    /// Disabling this is strongly discouraged.
     #[arg(
         long = "upstream-https-only",
         env = "PORXIE_UPSTREAM_HTTPS_ONLY",
@@ -173,10 +175,16 @@ struct Arguments {
     /// HTTP(S) proxy for upstream requests. Supports embedded credentials (https://user:pass@host).
     ///
     /// When unset, the system proxy configuration is used automatically.
-    #[arg(long = "upstream-proxy", env = "PORXIE_UPSTREAM_PROXY")]
+    #[arg(long = "upstream-proxy", env = "PORXIE_UPSTREAM_PROXY", value_parser = |v: &str| {
+        let url = Url::parse(v).map_err(|e| e.to_string())?;
+        if !matches!(url.scheme(), "http" | "https") {
+            return Err("proxy URL must use http:// or https://".to_string());
+        }
+        Ok(url)
+    })]
     upstream_proxy: Option<Url>,
 
-    /// Maximum duration before upstream PDS requests are timed out.
+    /// Maximum duration before upstream requests are timed out.
     #[arg(
         long = "upstream-timeout",
         env = "PORXIE_UPSTREAM_TIMEOUT",
