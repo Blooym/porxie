@@ -20,6 +20,6 @@ Links:
 
 Routes:
  - HTTP GET /did/cid - Resolve and fetch a blob from its origin.
- - HTTP DELETE /did/cid - Invalidate blob and moderation cache for a specific blob. Requires configured bearer auth token.
+ - HTTP DELETE /did/cid - Invalidate blob and policy cache for a specific blob. Requires configured bearer auth token.
 "#
 }

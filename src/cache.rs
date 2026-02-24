@@ -24,15 +24,15 @@ pub fn build_response_cache(max_capacity: u64) -> ResponseCache {
         .build()
 }
 
-pub type ModerationCache = MokaCache<(Did<'static>, Cid), CachedModerationAction>;
+pub type PolicyCache = MokaCache<(Did<'static>, Cid), CachedPolicyAction>;
 
 #[derive(Debug, Copy, Clone)]
-pub struct CachedModerationAction {
+pub struct CachedPolicyAction {
     pub can_serve: bool,
 }
 
-pub fn build_moderation_cache(max_capacity: u64, ttl: Duration) -> ModerationCache {
-    ModerationCache::builder()
+pub fn build_policy_cache(max_capacity: u64, ttl: Duration) -> PolicyCache {
+    PolicyCache::builder()
         .weigher(|key, _value| -> u32 {
             (key.0.len() + key.1.encoded_len())
                 .try_into()

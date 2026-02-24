@@ -4,7 +4,7 @@ mod mime;
 mod routes;
 
 use crate::{
-    cache::{ModerationCache, ResponseCache, build_moderation_cache, build_response_cache},
+    cache::{PolicyCache, ResponseCache, build_policy_cache, build_response_cache},
     http::{build_external_http_client, build_internal_http_client},
     routes::{delete_blob_handler, get_blob_handler, get_index_handler},
 };
@@ -75,8 +75,8 @@ struct Arguments {
     /// This header does not modify the internal cache lifetime of content, only how it instructs
     /// other clients to cache responses.
     #[arg(
-        long = "cache-header-value",
-        env = "PORXIE_CACHE_HEADER_VALUE",
+        long = "cache-control-header",
+        env = "PORXIE_CACHE_CONTROL_HEADER",
         default_value = "public, max-age=604800, must-revalidate"
     )]
     cache_control_header_value: HeaderValue,
@@ -100,7 +100,7 @@ struct Arguments {
 
     /// Maximum blob size that can be served through this CDN.
     ///
-    /// Content that exceeds this limit will return an HTTP 413 error.
+    /// Content that exceeds this limit will return an HTTP 422 error.
     #[arg(
         long = "max-blob-size",
         env = "PORXIE_MAX_BLOB_SIZE",
@@ -108,49 +108,49 @@ struct Arguments {
     )]
     max_blob_size: ByteSize,
 
-    /// Maximum size of cached moderation actions in memory.
+    /// Maximum size of cached policy decisions in memory.
     ///
     /// Each entry is lightweight, so small allocations can hold a large number of entries.
     #[arg(
-        long = "moderation-cache-size",
-        env = "PORXIE_MODERATION_CACHE_SIZE",
+        long = "policy-cache-size",
+        env = "PORXIE_POLICY_CACHE_SIZE",
         default_value = "256mb"
     )]
-    moderation_cache_size: ByteSize,
+    policy_cache_size: ByteSize,
 
-    /// How long moderation actions are cached before being invalidated.
+    /// How long policy decisions are cached before being re-checked.
     #[arg(
-        long = "moderation-cache-ttl",
-        env = "PORXIE_MODERATION_CACHE_TTL",
+        long = "policy-cache-ttl",
+        env = "PORXIE_POLICY_CACHE_TTL",
         default_value = "1h"
     )]
-    moderation_cache_ttl: humantime::Duration,
+    policy_cache_ttl: humantime::Duration,
 
-    /// Authorization bearer token header value sent alongside all requests to the moderation service.
+    /// Authorization bearer token sent alongside all requests to the policy service.
     #[arg(
-        long = "moderation-service-auth-token",
-        env = "PORXIE_MODERATION_SERVICE_AUTH_TOKEN",
-        requires = "moderation_service_url"
+        long = "policy-service-auth-token",
+        env = "PORXIE_POLICY_SERVICE_AUTH_TOKEN",
+        requires = "policy_service_url"
     )]
-    moderation_service_auth_token: Option<String>,
+    policy_service_auth_token: Option<String>,
 
-    /// Whether to allow requests to proceed if the moderation service is unavailable or returns an
+    /// Whether to allow requests to proceed if the policy service is unavailable or returns an
     /// unexpected status code.
     #[arg(
-        long = "moderation-service-fail-open",
-        env = "PORXIE_MODERATION_SERVICE_FAIL_OPEN",
+        long = "policy-service-fail-open",
+        env = "PORXIE_POLICY_SERVICE_FAIL_OPEN",
         default_value_t = false,
-        requires = "moderation_service_url"
+        requires = "policy_service_url"
     )]
-    moderation_service_fail_open: core::primitive::bool,
+    policy_service_fail_open: core::primitive::bool,
 
-    /// URL of an upstream moderation service that DID+CID pairs will be checked against.
+    /// URL of an upstream policy service that DID+CID pairs will be checked against.
     ///
     /// Requests are sent as HTTP GET <url>/<did>/<cid>.
     ///
     /// The service is expected to return HTTP 200 (OK) if permitted or HTTP 410 (GONE) if restricted.
-    #[arg(long = "moderation-service-url", env = "PORXIE_MODERATION_SERVICE_URL")]
-    moderation_service_url: Option<Url>,
+    #[arg(long = "policy-service-url", env = "PORXIE_POLICY_SERVICE_URL")]
+    policy_service_url: Option<Url>,
 
     /// URL of the PLC directory instance used for `did:plc` lookups.
     ///
@@ -205,11 +205,11 @@ struct AppState {
     max_blob_size: u64,
     cache_control_header: HeaderValue,
     response_cache: ResponseCache,
-    // Moderation.
-    moderation_service_url: Option<Url>,
-    moderation_service_auth_header: Option<HeaderValue>,
-    moderation_service_fail_open: bool,
-    moderation_cache: ModerationCache,
+    // Policy.
+    policy_service_url: Option<Url>,
+    policy_service_auth_header: Option<HeaderValue>,
+    policy_service_fail_open: bool,
+    policy_cache: PolicyCache,
 }
 
 #[tokio::main]
@@ -245,17 +245,17 @@ async fn main() -> Result<()> {
         max_blob_size: args.max_blob_size.as_u64(),
         cache_control_header: args.cache_control_header_value,
         response_cache: build_response_cache(args.cache_size.as_u64()),
-        moderation_service_url: args.moderation_service_url,
-        moderation_service_auth_header: args.moderation_service_auth_token.map(|token| {
+        policy_service_url: args.policy_service_url,
+        policy_service_auth_header: args.policy_service_auth_token.map(|token| {
             let mut header = HeaderValue::from_str(&format!("Bearer {token}"))
-                .expect("moderation service token should be a valid header value");
+                .expect("policy service token should be a valid header value");
             header.set_sensitive(true);
             header
         }),
-        moderation_service_fail_open: args.moderation_service_fail_open,
-        moderation_cache: build_moderation_cache(
-            args.moderation_cache_size.as_u64(),
-            args.moderation_cache_ttl.into(),
+        policy_service_fail_open: args.policy_service_fail_open,
+        policy_cache: build_policy_cache(
+            args.policy_cache_size.as_u64(),
+            args.policy_cache_ttl.into(),
         ),
     });
 

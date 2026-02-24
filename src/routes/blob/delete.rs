@@ -36,10 +36,10 @@ pub async fn delete_blob_handler(
         })?,
     );
 
-    info!("invalidating cached blob '{cid}' and cached moderation action '{cid}:{did}'");
+    info!("invalidating cached blob '{cid}' and cached policy decision '{cid}:{did}'");
 
     state.response_cache.invalidate(&cid).await;
-    state.moderation_cache.invalidate(&(did, cid)).await;
+    state.policy_cache.invalidate(&(did, cid)).await;
 
     Ok(StatusCode::OK)
 }

@@ -1,48 +1,44 @@
 # Porxie
 
-A correct and efficient ATProto Blob proxy service with caching and moderation takedowns.
+A correct and efficient ATProto Blob proxy service with caching and policy enforcement.
 
 ## Features
 
 - **Secure by default** - verifies blob CIDs are legitimate and serves them with strict headers.
-- **Primitive mimetype filter** - auto-detects blob MIME type from content and optionally restricts which mimetypes can be served. (Note: this validation is basic and falls back to `application/octet-stream` if the mimetype filter is enabled).
-- **In-memory cache** - TinyLFU-based caching for fast repeat access to frequently requested content and moderation actions.
-- **Moderation service** - optional integration with an external custom moderation service to provide content takedowns. Bring your own policies.
-- **Manual cache purging** - Cached content and moderation status can be purged via a simple authenticated HTTP DELETE.
+- **Primitive MIME type filter** - auto-detects blob MIME type from content and optionally restricts which MIME types can be served. (Note: this validation is basic and falls back to `application/octet-stream` if that MIME type is enabled).
+- **Policy enforcement** - optional integration with an external policy service to control which blobs can be served. Bring your own rules.
+- **In-memory cache** - TinyLFU-based caching for fast repeat access to frequently requested content and policy decisions. Manual cache purging is supported via a simple authenticated HTTP DELETE request.
 
 ## Routes
 
-- **GET** `/did/cid` - Resolve and fetch a blob from its origin.
-- **DELETE** `/did/cid` - Invalidate cached blob and moderation data. Requires configured bearer auth token.
+- **GET** `/did/cid`: Resolve and fetch a blob from its origin.
+- **DELETE** `/did/cid`: Invalidate cached blob and policy data. Requires a configured bearer auth token.
 
 ## Usage
 
-Please refer to the [configuration](#configuration) section for details on how to configure Porxie.
+Porxie does not handle TLS, so it should be placed behind a reverse proxy such as [Caddy](https://caddyserver.com), [Traefik](https://traefik.io/traefik), or [nginx](https://nginx.org). Make sure your reverse proxy (and any other intermediaries) pass through `Cache-Control` and `Content-Disposition` headers from upstream responses.
 
-Porxie does not handle TLS termination and should be placed behind a reverse proxy such as [Caddy](https://caddyserver.com), [Traefik](https://traefik.io/traefik), or [nginx](https://nginx.org). Ensure your reverse proxy is configured to pass through `Cache-Control` and `Content-Disposition` headers from upstream responses. Please note that if you use other intermediary services you may need to configure those to pass through the headers as well.
-
-Additionally, it is recommended you setup a CDN layer infront of Porxie (or any processing services you put infront of it instead) that can handle long-term global caching. You may also wish to run Porxie in several locations worldwide.
+It is also recommended to put a CDN in front of Porxie for long-term caching and faster responses. Additionally, as Porxie is stateless, you can deploy in several regions for better availability.
 
 ### Directly
 
-To run Porxie directly via CLI, you can simply compile and use the binary with [Rust and Cargo](https://rust-lang.org/tools/install/).
+To run Porxie directly, install [Rust and Cargo](https://rust-lang.org/tools/install/) and then:
 
-1. Install with
+1. Install the binary:
 
    ```sh
    cargo install --git https://codeberg.org/Blooym/porxie.git
    ```
 
-2. Set configuration values as necessary.
+2. Run the server with your chosen [configuration](#configuration) options:
 
-3. Run the server
    ```sh
-   porxie <flags>
+   porxie
    ```
 
 ### With Docker
 
-To run Porxie with the Docker CLI and default settings you can run the following:
+To run Porxie with the Docker CLI and default settings, use the following command:
 
 ```sh
 docker run -d \
@@ -54,7 +50,7 @@ docker run -d \
 
 ### With Docker Compose
 
-To run Porxie with Docker Compose and default settings you can run the following:
+To run Porxie with Docker Compose, you can start with the following `compose.yml` template:
 
 ```yaml
 services:
@@ -70,10 +66,11 @@ services:
       - no-new-privileges
 ```
 
-<details>
-<summary>Pairing Porxie with Imgproxy for image post-processing</summary>
+### Pairing with Imgproxy
 
-[Imgproxy](https://imgproxy.net) can be placed in front of Porxie to handle image transformations such as resizing, cropping, and format conversions. An example configuration for this would look like this:
+[Imgproxy](https://imgproxy.net) can be placed in front of Porxie to handle image transformations such as resizing, cropping, and format conversions.
+
+Using Docker Compose, an example `compose.yml` would look like this:
 
 ```yaml
 services:
@@ -110,9 +107,7 @@ services:
 
 #### Replicating cdn.bsky.app
 
-Bluesky's CDN serves images at URLs in the form of `https://cdn.bsky.app/img/{preset}/plain/{did}/{cid}@{format}`. By configuring imgproxy with matching presets and enabling preset-only mode, you can use your own server with the same URL scheme, which makes this a near drop-in replacement:
-
-To do this, set the following presets.
+Bluesky's CDN serves images at URLs in the form of `https://cdn.bsky.app/img/{preset}/plain/{did}/{cid}@{format}`. By configuring imgproxy with matching presets and enabling preset-only mode, you can use the same URL scheme as a near drop-in replacement. Set the following presets:
 
 ```yaml
 IMGPROXY_PRESETS: >-
@@ -125,11 +120,32 @@ IMGPROXY_ONLY_PRESETS: true
 
 Please refer to the imgproxy documentation for up-to-date details if you wish to add more or modify these. **Bluesky may change the format of their CDN at any time.**
 
-</details>
+## Policy Service
 
-### Configuration
+The policy service is an optional external HTTP service that Porxie consults before serving any blob. You build and run the service yourself - Porxie just calls it and acts on the response. This lets you implement domain-specific policy for your service such as takedowns, allow lists, account-level bans, or anything else.
 
-All options can be set via flags, environment variables, or a `.env` file. For up-to-date and complete help, please use the `--help` flag (from which the following help is generated).
+### How it works
+
+For every incoming request, Porxie sends `GET <policy-service-url>/<did>/<cid>` to your policy service. The response code received will determine what Porxie does:
+
+- **200 OK**: the blob is allowed and will be served
+- **410 Gone**: the blob is restricted; Porxie returns 410 to the client
+
+Any other status code is treated as an error.
+
+Policy decisions are cached per DID+CID pair for the duration set by `--policy-cache-ttl`, so your service will not be hit on every request. To clear a cached decision immediately, use the `DELETE /<did>/<cid>` endpoint.
+
+### Authentication
+
+If your policy service requires authentication, set `--policy-service-auth-token` to a bearer token. Porxie will include it as an `Authorization: Bearer <token>` header on every request.
+
+### Fail-open vs fail-closed
+
+By default, if the policy service is unreachable or returns an unexpected status, Porxie blocks the request and returns a 500. This is fail-closed behaviour. When `--policy-service-fail-open` is set to true, requests will go through as normal. Use this if uptime matters more to you than strict enforcement.
+
+## Configuration
+
+All options can be set via flags, environment variables, or a `.env` file. For up-to-date and complete help, please use the `--help` flag.
 
 ```
 Usage: porxie [OPTIONS]
@@ -162,12 +178,12 @@ Options:
           [env: PORXIE_ALLOWED_MIMETYPES=]
           [default: */*]
 
-      --cache-header-value <CACHE_CONTROL_HEADER_VALUE>
+      --cache-control-header <CACHE_CONTROL_HEADER_VALUE>
           The cache-control header value to send alongside responses.
 
           This header does not modify the internal cache lifetime of content, only how it instructs other clients to cache responses.
 
-          [env: PORXIE_CACHE_HEADER_VALUE=]
+          [env: PORXIE_CACHE_CONTROL_HEADER=]
           [default: "public, max-age=604800, must-revalidate"]
 
       --cache-size <CACHE_SIZE>
@@ -185,45 +201,45 @@ Options:
       --max-blob-size <MAX_BLOB_SIZE>
           Maximum blob size that can be served through this CDN.
 
-          Content that exceeds this limit will return an HTTP 413 error.
+          Content that exceeds this limit will return an HTTP 422 error.
 
           [env: PORXIE_MAX_BLOB_SIZE=]
           [default: 50mb]
 
-      --moderation-cache-size <MODERATION_CACHE_SIZE>
-          Maximum size of cached moderation responses in memory.
+      --policy-cache-size <POLICY_CACHE_SIZE>
+          Maximum size of cached policy decisions in memory.
 
           Each entry is lightweight, so small allocations can hold a large number of entries.
 
-          [env: PORXIE_MODERATION_CACHE_SIZE=]
-          [default: 128mb]
+          [env: PORXIE_POLICY_CACHE_SIZE=]
+          [default: 256mb]
 
-      --moderation-cache-ttl <MODERATION_CACHE_TTL>
-          How long moderation responses are cached before being re-checked
+      --policy-cache-ttl <POLICY_CACHE_TTL>
+          How long policy decisions are cached before being re-checked
 
-          [env: PORXIE_MODERATION_CACHE_TTL=]
+          [env: PORXIE_POLICY_CACHE_TTL=]
           [default: 1h]
 
-      --moderation-service-auth-token <MODERATION_SERVICE_AUTH_TOKEN>
-          Bearer auth token sent with all requests to the moderation service
+      --policy-service-auth-token <POLICY_SERVICE_AUTH_TOKEN>
+          Authorization bearer token sent alongside all requests to the policy service
 
-          [env: PORXIE_MODERATION_SERVICE_AUTH_TOKEN=]
+          [env: PORXIE_POLICY_SERVICE_AUTH_TOKEN=]
 
-      --moderation-service-fail-open <MODERATION_SERVICE_FAIL_OPEN>
-          Whether to allow requests to proceed if the moderation service is unavailable or returns an unexpected status code
+      --policy-service-fail-open <POLICY_SERVICE_FAIL_OPEN>
+          Whether to allow requests to proceed if the policy service is unavailable or returns an unexpected status code
 
-          [env: PORXIE_MODERATION_SERVICE_FAIL_OPEN=]
+          [env: PORXIE_POLICY_SERVICE_FAIL_OPEN=]
           [default: false]
           [possible values: true, false]
 
-      --moderation-service-url <MODERATION_SERVICE_URL>
-          URL of an upstream moderation service that DID+CID pairs will be checked against.
+      --policy-service-url <POLICY_SERVICE_URL>
+          URL of an upstream policy service that DID+CID pairs will be checked against.
 
           Requests are sent as HTTP GET <url>/<did>/<cid>.
 
-          The service is expected to return HTTP 200 if permitted or HTTP 410 if taken down.
+          The service is expected to return HTTP 200 (OK) if permitted or HTTP 410 (GONE) if restricted.
 
-          [env: PORXIE_MODERATION_SERVICE_URL=]
+          [env: PORXIE_POLICY_SERVICE_URL=]
 
       --plc-directory-url <PLC_DIRECTORY_URL>
           URL of the PLC directory instance used for `did:plc` lookups.
@@ -236,7 +252,7 @@ Options:
       --upstream-https-only <UPSTREAM_HTTPS_ONLY>
           Only allow HTTPS when connecting to upstreams.
 
-          Disabling this is strongly discouraged outside of local development.
+          Disabling this is strongly discouraged.
 
           [env: PORXIE_UPSTREAM_HTTPS_ONLY=]
           [default: true]
@@ -250,7 +266,7 @@ Options:
           [env: PORXIE_UPSTREAM_PROXY=]
 
       --upstream-timeout <UPSTREAM_TIMEOUT>
-          Maximum duration before upstream PDS requests are timed out
+          Maximum duration before upstream requests are timed out
 
           [env: PORXIE_UPSTREAM_TIMEOUT=]
           [default: 30s]

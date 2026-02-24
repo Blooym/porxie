@@ -1,6 +1,6 @@
 use crate::{
     AppState,
-    cache::{CachedModerationAction, CachedResponse},
+    cache::{CachedPolicyAction, CachedResponse},
     mime::is_mime_allowed,
 };
 use anyhow::bail;
@@ -56,51 +56,51 @@ pub async fn get_blob_handler(
         },
     );
 
-    // Query moderation service (if set) to see if the blob can be served.
+    // Query policy service (if set) to see if the blob can be served.
     //
-    // Moderation queries will be made if needed, even when blob itself is cached.
-    // All moderation queries will be cached for a duration to prevent flooding the upstream.
-    if let Some(ref moderation_service_url) = state.moderation_service_url {
+    // Policy queries will be made if needed, even when the blob itself is cached.
+    // All policy decisions will be cached for a duration to prevent flooding the upstream.
+    if let Some(ref policy_service_url) = state.policy_service_url {
         match state
-            .moderation_cache
+            .policy_cache
             .try_get_with_by_ref(&(did.clone(), cid), async {
-                let mut moderation_service_url = moderation_service_url.clone();
-                moderation_service_url
+                let mut policy_service_url = policy_service_url.clone();
+                policy_service_url
                     .path_segments_mut()
-                    .expect("moderation service URL cannot be a base")
+                    .expect("policy service URL cannot be a base")
                     .push(did.as_str())
                     .push(&cid.to_string());
-                let mut request = state.internal_http_client.get(moderation_service_url);
-                if let Some(ref auth) = state.moderation_service_auth_header {
+                let mut request = state.internal_http_client.get(policy_service_url);
+                if let Some(ref auth) = state.policy_service_auth_header {
                     request = request.header(reqwest::header::AUTHORIZATION, auth);
                 }
                 match request.send().await {
                     Ok(response) => match response.status() {
-                        StatusCode::OK => Ok(CachedModerationAction { can_serve: true }),
+                        StatusCode::OK => Ok(CachedPolicyAction { can_serve: true }),
                         StatusCode::GONE => {
-                            info!("moderation service rejected blob {cid} for {did}");
-                            Ok(CachedModerationAction { can_serve: false })
+                            info!("policy service rejected blob {cid} for {did}");
+                            Ok(CachedPolicyAction { can_serve: false })
                         }
                         status => {
-                            error!("moderation service returned unexpected status: {status}");
+                            error!("policy service returned unexpected status: {status}");
                             bail!("unexpected status code: {status}");
                         }
                     },
                     Err(err) => {
-                        error!("error occured with the moderation service: {err:?}");
+                        error!("error occurred contacting the policy service: {err:?}");
                         Err(err.into())
                     }
                 }
             })
             .await
         {
-            Ok(mod_state) if !mod_state.can_serve => {
+            Ok(policy) if !policy.can_serve => {
                 return Err((
                     StatusCode::GONE,
                     "Content is not available through this service",
                 ));
             }
-            Err(_) if !state.moderation_service_fail_open => {
+            Err(_) if !state.policy_service_fail_open => {
                 return Err((StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"));
             }
             _ => {}

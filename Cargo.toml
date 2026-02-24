@@ -1,6 +1,6 @@
 [package]
 name = "porxie"
-description = "A correct and efficient ATProto Blob proxy service with caching and moderation takedowns."
+description = "A correct and efficient ATProto Blob proxy service with caching and policy enforcement."
 authors = ["Blooym"]
 version = "0.1.0"
 edition = "2024"
