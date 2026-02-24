@@ -20,7 +20,7 @@ Porxie does not handle TLS, so it should be placed behind a reverse proxy such a
 
 It is also recommended to put a CDN in front of Porxie for long-term caching and faster responses. Additionally, as Porxie is stateless, you can deploy in several regions for better availability.
 
-### Directly
+### Run: Binary
 
 To run Porxie directly, install [Rust and Cargo](https://rust-lang.org/tools/install/) and then:
 
@@ -36,7 +36,7 @@ To run Porxie directly, install [Rust and Cargo](https://rust-lang.org/tools/ins
    porxie
    ```
 
-### With Docker
+### Run: Docker
 
 To run Porxie with the Docker CLI and default settings, use the following command:
 
@@ -48,7 +48,7 @@ docker run -d \
   ghcr.io/blooym/porxie:latest
 ```
 
-### With Docker Compose
+### Run: Docker Compose
 
 To run Porxie with Docker Compose, you can start with the following `compose.yml` template:
 
@@ -66,7 +66,7 @@ services:
       - no-new-privileges
 ```
 
-### Pairing with Imgproxy
+### Run: Docker Compose & Imgproxy
 
 [Imgproxy](https://imgproxy.net) can be placed in front of Porxie to handle image transformations such as resizing, cropping, and format conversions.
 
