@@ -241,6 +241,16 @@ pub async fn get_blob_handler(
             Ok(response)
         }
         Err(err) => Err(match *err {
+            BlobFetchError::BlobNotFound => (StatusCode::NOT_FOUND, "Blob not found"),
+            BlobFetchError::BlobTooLarge => {
+                (StatusCode::FORBIDDEN, "Blob exceeds maximum allowed size")
+            }
+            BlobFetchError::DisallowedMimeType => {
+                (StatusCode::FORBIDDEN, "Content type is not allowed")
+            }
+            BlobFetchError::UnsupportedMultihash => {
+                (StatusCode::NOT_IMPLEMENTED, "Unsupported CID multihash")
+            }
             BlobFetchError::PdsResolutionFailed => {
                 (StatusCode::BAD_GATEWAY, "Failed to resolve PDS for DID")
             }
@@ -249,22 +259,9 @@ pub async fn get_blob_handler(
             | BlobFetchError::BlobStreamFailed => {
                 (StatusCode::BAD_GATEWAY, "Failed to fetch blob from PDS")
             }
-            BlobFetchError::BlobNotFound => (StatusCode::NOT_FOUND, "Not found"),
-            BlobFetchError::BlobTooLarge => (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "Blob exceeds maximum allowed size",
-            ),
-            BlobFetchError::UnsupportedMultihash => (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "Unsupported CID multihash",
-            ),
             BlobFetchError::CidMismatch => {
                 (StatusCode::BAD_GATEWAY, "Blob content does not match CID")
             }
-            BlobFetchError::DisallowedMimeType => (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "Content type is not allowed",
-            ),
         }),
     }
 }
