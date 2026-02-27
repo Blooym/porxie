@@ -71,8 +71,8 @@ pub async fn get_blob_handler(
                     .push(did.as_str())
                     .push(&cid.to_string());
                 let mut request = state.internal_http_client.get(policy_service_url);
-                if let Some(ref auth) = state.policy_service_auth_header {
-                    request = request.header(reqwest::header::AUTHORIZATION, auth);
+                for (name, value) in &state.policy_service_headers {
+                    request = request.header(name, value);
                 }
                 match request.send().await {
                     Ok(response) => match response.status() {

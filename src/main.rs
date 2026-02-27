@@ -13,7 +13,7 @@ use anyhow::Result;
 use axum::{
     Router,
     extract::Request,
-    http::{HeaderValue, StatusCode, header},
+    http::{HeaderName, HeaderValue, StatusCode, header},
     middleware::{self as axum_middleware, Next},
     routing::{delete, get},
 };
@@ -59,8 +59,8 @@ struct Arguments {
 
     /// List of mimetypes that can be served through this CDN.
     ///
-    /// Validation is done loosely via content inference and is not foolproof.
-    /// It is recommended to apply a sandboxed layer that will process the blob
+    /// Validation is done loosely via content inference and is not foolproof -
+    /// it is recommended to apply a sandboxed layer that will process the blob
     /// further to validate its type.
     #[arg(
         long = "allowed-mimetypes",
@@ -70,7 +70,7 @@ struct Arguments {
     )]
     allowed_mimetypes: Vec<Mime>,
 
-    /// The cache-control header value to send alongside responses.
+    /// The Cache-Control header value to send alongside responses.
     ///
     /// This header does not modify the internal cache lifetime of content, only how it instructs
     /// other clients to cache responses.
@@ -92,8 +92,8 @@ struct Arguments {
     ///
     /// The default value is conservatively low; you may wish to raise it to fit your needs.
     #[arg(
-        long = "cache-size",
-        env = "PORXIE_CACHE_SIZE",
+        long = "response-cache-size",
+        env = "PORXIE_RESPONSE_CACHE_SIZE",
         default_value = "512mb"
     )]
     cache_size: ByteSize,
@@ -126,13 +126,33 @@ struct Arguments {
     )]
     policy_cache_ttl: humantime::Duration,
 
-    /// Authorization bearer token sent alongside all requests to the policy service.
+    /// Headers sent alongside all requests to the policy service.
+    ///
+    /// Each header must be in the format "Name: value". When using the CLI, the flag can be used multiple times.
+    /// When setting via environment variable, headers are pipe-separated (|).
+    ///
+    /// As pipes are used as a delimiter, they cannot be contained in headers.
+    ///
+    /// Example (cli): '--policy-service-header "Authorization: 123" --policy-service-header "Cool-Header: Value"'
+    ///
+    /// Example (env): 'PORXIE_POLICY_SERVICE_HEADERS="Authorization: 123|Cool-Header: Value"'
     #[arg(
-        long = "policy-service-auth-token",
-        env = "PORXIE_POLICY_SERVICE_AUTH_TOKEN",
-        requires = "policy_service_url"
+        long = "policy-service-header",
+        env = "PORXIE_POLICY_SERVICE_HEADERS",
+        value_delimiter = '|',
+        requires = "policy_service_url",
+        value_parser = |s: &str| -> Result<(HeaderName, HeaderValue), String> {
+            let (name, value) = s.split_once(':')
+                .ok_or_else(|| format!("invalid header {s:?}: expected 'Name: value'"))?;
+            let name = HeaderName::try_from(name.trim())
+                .map_err(|e| format!("invalid header name in {s:?}: {e}"))?;
+            let mut value = HeaderValue::try_from(value.trim())
+                .map_err(|e| format!("invalid header value in {s:?}: {e}"))?;
+            value.set_sensitive(true);
+            Ok((name, value))
+        }
     )]
-    policy_service_auth_token: Option<String>,
+    policy_service_headers: Vec<(HeaderName, HeaderValue)>,
 
     /// Whether to allow requests to proceed if the policy service is unavailable or returns an
     /// unexpected status code.
@@ -207,7 +227,7 @@ struct AppState {
     response_cache: ResponseCache,
     // Policy.
     policy_service_url: Option<Url>,
-    policy_service_auth_header: Option<HeaderValue>,
+    policy_service_headers: Vec<(HeaderName, HeaderValue)>,
     policy_service_fail_open: bool,
     policy_cache: PolicyCache,
 }
@@ -246,12 +266,7 @@ async fn main() -> Result<()> {
         cache_control_header: args.cache_control_header_value,
         response_cache: build_response_cache(args.cache_size.as_u64()),
         policy_service_url: args.policy_service_url,
-        policy_service_auth_header: args.policy_service_auth_token.map(|token| {
-            let mut header = HeaderValue::from_str(&format!("Bearer {token}"))
-                .expect("policy service token should be a valid header value");
-            header.set_sensitive(true);
-            header
-        }),
+        policy_service_headers: args.policy_service_headers,
         policy_service_fail_open: args.policy_service_fail_open,
         policy_cache: build_policy_cache(
             args.policy_cache_size.as_u64(),

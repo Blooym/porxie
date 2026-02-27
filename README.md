@@ -135,9 +135,9 @@ Any other status code is treated as an error.
 
 Policy decisions are cached per DID+CID pair for the duration set by `--policy-cache-ttl`, so your service will not be hit on every request. To clear a cached decision immediately, use the `DELETE /<did>/<cid>` endpoint.
 
-### Authentication
+### Headers
 
-If your policy service requires authentication, set `--policy-service-auth-token` to a bearer token. Porxie will include it as an `Authorization: Bearer <token>` header on every request.
+Custom headers can be attached to every request Porxie sends to the policy service, for example to pass authentication credentials. See the [Configuration](#configuration) section for details.
 
 ### Fail-open vs fail-closed
 
@@ -173,20 +173,20 @@ Options:
       --allowed-mimetypes <ALLOWED_MIMETYPES>
           List of mimetypes that can be served through this CDN.
 
-          Validation is done loosely via content inference and is not foolproof. It is recommended to apply a sandboxed layer that will process the blob further to validate its type.
+          Validation is done loosely via content inference and is not foolproof - it is recommended to apply a sandboxed layer that will process the blob further to validate its type.
 
           [env: PORXIE_ALLOWED_MIMETYPES=]
           [default: */*]
 
       --cache-control-header <CACHE_CONTROL_HEADER_VALUE>
-          The cache-control header value to send alongside responses.
+          The Cache-Control header value to send alongside responses.
 
           This header does not modify the internal cache lifetime of content, only how it instructs other clients to cache responses.
 
           [env: PORXIE_CACHE_CONTROL_HEADER=]
           [default: "public, max-age=604800, must-revalidate"]
 
-      --cache-size <CACHE_SIZE>
+      --response-cache-size <CACHE_SIZE>
           Maximum size of cached responses in memory.
 
           Content is evicted using a TinyLFU policy that automatically prioritises the most frequently requested keys.
@@ -195,7 +195,7 @@ Options:
 
           The default value is conservatively low; you may wish to raise it to fit your needs.
 
-          [env: PORXIE_CACHE_SIZE=]
+          [env: PORXIE_RESPONSE_CACHE_SIZE=]
           [default: 512mb]
 
       --max-blob-size <MAX_BLOB_SIZE>
@@ -220,10 +220,18 @@ Options:
           [env: PORXIE_POLICY_CACHE_TTL=]
           [default: 1h]
 
-      --policy-service-auth-token <POLICY_SERVICE_AUTH_TOKEN>
-          Authorization bearer token sent alongside all requests to the policy service
+      --policy-service-header <POLICY_SERVICE_HEADERS>
+          Headers sent alongside all requests to the policy service.
 
-          [env: PORXIE_POLICY_SERVICE_AUTH_TOKEN=]
+          Each header must be in the format "Name: value". When using the CLI, the flag can be used multiple times. When setting via environment variable, headers are pipe-separated (|).
+
+          As pipes are used as a delimiter, they cannot be contained in headers.
+
+          Example (cli): '--policy-service-header "Authorization: 123" --policy-service-header "Cool-Header: Value"'
+
+          Example (env): 'PORXIE_POLICY_SERVICE_HEADERS="Authorization: 123|Cool-Header: Value"'
+
+          [env: PORXIE_POLICY_SERVICE_HEADERS=]
 
       --policy-service-fail-open <POLICY_SERVICE_FAIL_OPEN>
           Whether to allow requests to proceed if the policy service is unavailable or returns an unexpected status code

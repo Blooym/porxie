@@ -2,6 +2,8 @@
 name = "porxie"
 description = "A correct and efficient ATProto Blob proxy service with caching and policy enforcement."
 authors = ["Blooym"]
+repository = "https://codeberg.org/Blooym/porxie"
+license = "AGPL-3.0-or-later"
 version = "0.1.0"
 edition = "2024"
 
