@@ -106,6 +106,25 @@
               Environment = lib.mapAttrsToList (k: v: "${k}=${if builtins.isInt v then toString v else v}") cfg.settings;
               Restart = "on-failure";
               RestartSec = 5;
+
+              CapabilityBoundingSet = "";
+              AmbientCapabilities = "";
+              NoNewPrivileges = true;
+              ReadOnlyRootFilesystem = true;
+              ProtectSystem = "strict";
+              ProtectHome = true;
+              PrivateTmp = true;
+              PrivateDevices = true;
+              ProtectKernelTunables = true;
+              ProtectKernelModules = true;
+              ProtectKernelLogs = true;
+              ProtectControlGroups = true;
+              ProtectClock = true;
+              ProtectHostname = true;
+              RestrictSUIDSGID = true;
+              RestrictRealtime = true;
+              LockPersonality = true;
+              RestrictNamespaces = true;
             };
           };
         };
