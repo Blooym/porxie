@@ -1,6 +1,8 @@
 mod blob;
+mod cache;
 
-pub use blob::{delete_blob_handler, get_blob_handler};
+pub use blob::get_blob_handler;
+pub use cache::*;
 
 pub async fn get_index_handler() -> &'static str {
     r#"
@@ -19,7 +21,7 @@ Links:
  - ATProto: https://atproto.com
 
 Routes:
- - HTTP GET /did/cid - Resolve and fetch a blob from its origin.
- - HTTP DELETE /did/cid - Invalidate blob and policy cache for a specific blob. Requires configured bearer auth token.
+ - HTTP GET /{did}/{cid} - Resolve and fetch a blob from its origin.
+ - HTTP DELETE /cache/{cid or did} - Invalidate cache for either a CID (blob, policy, ownership) or for a DID (ownerships and policies). Requires configured bearer auth token.
 "#
 }

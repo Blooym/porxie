@@ -11,12 +11,12 @@ A correct and efficient ATProto Blob proxy service with caching and policy enfor
 
 ## Routes
 
-- **GET** `/did/cid`: Resolve and fetch a blob from its origin.
-- **DELETE** `/did/cid`: Invalidate cached blob and policy data. Requires a configured bearer auth token.
+- **GET** `/{did}/{cid}` - Resolve and fetch a blob from its origin.
+- **DELETE** `/cache/{cid or did}` - Invalidate cache for either a CID (blob, policy, ownership) or for a DID (ownerships and policies). Requires configured bearer auth token.
 
 ## Usage
 
-Porxie does not handle TLS, so it should be placed behind a reverse proxy such as [Caddy](https://caddyserver.com), [Traefik](https://traefik.io/traefik), or [nginx](https://nginx.org). Make sure your reverse proxy (and any other intermediaries) pass through `Cache-Control` and `Content-Disposition` headers from upstream responses.
+Porxie does not handle TLS, so it should be placed behind a reverse proxy such as [Caddy](https://caddyserver.com), [Traefik](https://traefik.io/traefik), or [nginx](https://nginx.org). Make sure your reverse proxy (and any other intermediaries) pass through, at minimum, the `Cache-Control`, `Content-Security-Policy` and `Content-Disposition` headers from upstream responses.
 
 It is also recommended to put a CDN in front of Porxie for long-term caching and faster responses. Additionally, as Porxie is stateless, you can deploy in several regions for better availability.
 
@@ -152,7 +152,7 @@ Usage: porxie [OPTIONS]
 
 Options:
       --address <ADDRESS>
-          Socket address to bind the server to
+          Socket address (IPv4 or IPv6) to bind the server to
 
           [env: PORXIE_ADDRESS=]
           [default: 127.0.0.1:6314]
@@ -164,7 +164,7 @@ Options:
           [default: 60s]
 
       --auth-token <AUTH_TOKEN>
-          Bearer token required to authenticate admin requests.
+          Bearer token that authenticates admin requests.
 
           When unset, all authenticated endpoints are unusable.
 
@@ -175,27 +175,27 @@ Options:
 
           Validation is done loosely via content inference and is not foolproof - it is recommended to apply a sandboxed layer that will process the blob further to validate its type.
 
+          By default everything is allowed.
+
           [env: PORXIE_ALLOWED_MIMETYPES=]
           [default: */*]
 
       --cache-control-header <CACHE_CONTROL_HEADER_VALUE>
           The Cache-Control header value to send alongside responses.
 
-          This header does not modify the internal cache lifetime of content, only how it instructs other clients to cache responses.
+          This header does not modify the internal cache lifetime of content, only how other clients are told to cache responses.
 
           [env: PORXIE_CACHE_CONTROL_HEADER=]
           [default: "public, max-age=604800, must-revalidate"]
 
-      --response-cache-size <CACHE_SIZE>
-          Maximum size of cached responses in memory.
+      --cache-size <CACHE_SIZE>
+          Total in-memory cache allocation size.
 
-          Content is evicted using a TinyLFU policy that automatically prioritises the most frequently requested keys.
-
-          It is recommended you deploy a dedicated caching service in front of this service for the best cache performance. The built-in cache is optimised for handling frequent requests and bursts requesting the same content.
+          Content is evicted using a TinyLFU policy that automatically prioritises retaining the most frequently requested keys.
 
           The default value is conservatively low; you may wish to raise it to fit your needs.
 
-          [env: PORXIE_RESPONSE_CACHE_SIZE=]
+          [env: PORXIE_CACHE_SIZE=]
           [default: 512mb]
 
       --max-blob-size <MAX_BLOB_SIZE>
@@ -205,14 +205,6 @@ Options:
 
           [env: PORXIE_MAX_BLOB_SIZE=]
           [default: 50mb]
-
-      --policy-cache-size <POLICY_CACHE_SIZE>
-          Maximum size of cached policy decisions in memory.
-
-          Each entry is lightweight, so small allocations can hold a large number of entries.
-
-          [env: PORXIE_POLICY_CACHE_SIZE=]
-          [default: 256mb]
 
       --policy-cache-ttl <POLICY_CACHE_TTL>
           How long policy decisions are cached before being re-checked
@@ -256,15 +248,6 @@ Options:
 
           [env: PORXIE_PLC_DIRECTORY_URL=]
           [default: https://plc.directory]
-
-      --upstream-https-only <UPSTREAM_HTTPS_ONLY>
-          Only allow HTTPS when connecting to upstreams.
-
-          Disabling this is strongly discouraged.
-
-          [env: PORXIE_UPSTREAM_HTTPS_ONLY=]
-          [default: true]
-          [possible values: true, false]
 
       --upstream-proxy <UPSTREAM_PROXY>
           HTTP(S) proxy for upstream requests. Supports embedded credentials (https://user:pass@host).

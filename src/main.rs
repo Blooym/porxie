@@ -4,9 +4,9 @@ mod mime;
 mod routes;
 
 use crate::{
-    cache::{PolicyCache, ResponseCache, build_policy_cache, build_response_cache},
+    cache::{CacheBuildOptions, Caches, build_caches},
     http::{build_external_http_client, build_internal_http_client},
-    routes::{delete_blob_handler, get_blob_handler, get_index_handler},
+    routes::{delete_cache_handler, get_blob_handler, get_index_handler},
 };
 use ::mime::{Mime, STAR_STAR};
 use anyhow::Result;
@@ -25,7 +25,7 @@ use jacquard_identity::{
     resolver::{PlcSource, ResolverOptions},
 };
 use reqwest::Url;
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, num::NonZeroU64, sync::Arc, time::Duration};
 use tokio::{net::TcpListener, signal};
 use tower_http::{
     catch_panic::CatchPanicLayer,
@@ -39,7 +39,7 @@ use tracing_subscriber::EnvFilter;
 #[derive(Debug, Clone, Parser)]
 #[clap(author, about, long_about, version)]
 struct Arguments {
-    /// Socket address to bind the server to.
+    /// Socket address (IPv4 or IPv6) to bind the server to.
     #[arg(
         long = "address",
         env = "PORXIE_ADDRESS",
@@ -51,7 +51,7 @@ struct Arguments {
     #[arg(long = "timeout", env = "PORXIE_TIMEOUT", default_value = "60s")]
     timeout: humantime::Duration,
 
-    /// Bearer token required to authenticate admin requests.
+    /// Bearer token that authenticates admin requests.
     ///
     /// When unset, all authenticated endpoints are unusable.
     #[arg(long = "auth-token", env = "PORXIE_AUTH_TOKEN")]
@@ -62,6 +62,8 @@ struct Arguments {
     /// Validation is done loosely via content inference and is not foolproof -
     /// it is recommended to apply a sandboxed layer that will process the blob
     /// further to validate its type.
+    ///
+    /// By default everything is allowed.
     #[arg(
         long = "allowed-mimetypes",
         env = "PORXIE_ALLOWED_MIMETYPES",
@@ -72,8 +74,8 @@ struct Arguments {
 
     /// The Cache-Control header value to send alongside responses.
     ///
-    /// This header does not modify the internal cache lifetime of content, only how it instructs
-    /// other clients to cache responses.
+    /// This header does not modify the internal cache lifetime of content, only
+    /// how other clients are told to cache responses.
     #[arg(
         long = "cache-control-header",
         env = "PORXIE_CACHE_CONTROL_HEADER",
@@ -81,20 +83,34 @@ struct Arguments {
     )]
     cache_control_header_value: HeaderValue,
 
-    /// Maximum size of cached responses in memory.
+    /// Total in-memory cache allocation size.
     ///
-    /// Content is evicted using a TinyLFU policy that automatically prioritises the most
-    /// frequently requested keys.
-    ///
-    /// It is recommended you deploy a dedicated caching service in front of this service for the
-    /// best cache performance. The built-in cache is optimised for handling frequent requests and bursts
-    /// requesting the same content.
+    /// Content is evicted using a TinyLFU policy that automatically prioritises retaining
+    /// the most frequently requested keys.
     ///
     /// The default value is conservatively low; you may wish to raise it to fit your needs.
     #[arg(
-        long = "response-cache-size",
-        env = "PORXIE_RESPONSE_CACHE_SIZE",
-        default_value = "512mb"
+        long = "cache-size",
+        env = "PORXIE_CACHE_SIZE",
+        default_value = "512mb",
+        value_parser = |v: &str| -> Result<ByteSize, String> {
+            let size: ByteSize = v.parse().map_err(|e| format!("{e}"))?;
+            if size.as_u64() < 8_000_000 {
+                return Err("minimum cache size must be 8mb".to_string())
+            }
+
+            let total_mem = sysinfo::System::new_with_specifics(
+                sysinfo::RefreshKind::nothing().with_memory(sysinfo::MemoryRefreshKind::everything()),
+            ).total_memory();
+            if size.as_u64() > total_mem {
+                return Err(format!(
+                    "exceeds total system memory ({}) and could cause the process or system to crash",
+                    ByteSize(total_mem).display().si(),
+                ));
+            }
+
+            Ok(size)
+        }
     )]
     cache_size: ByteSize,
 
@@ -104,19 +120,23 @@ struct Arguments {
     #[arg(
         long = "max-blob-size",
         env = "PORXIE_MAX_BLOB_SIZE",
-        default_value = "50mb"
+        default_value = "50mb",
+        value_parser = |v: &str| -> Result<ByteSize, String> {
+            let size: ByteSize = v.parse().map_err(|e| format!("{e}"))?;
+            let total_mem = sysinfo::System::new_with_specifics(
+                sysinfo::RefreshKind::nothing().with_memory(sysinfo::MemoryRefreshKind::everything()),
+            ).total_memory().div_euclid(2);
+            if size.as_u64() > total_mem {
+                return Err(format!(
+                    "exceeds total system memory ({}) and could cause the process or system to crash",
+                    ByteSize(total_mem).display().si(),
+                ));
+            }
+
+            Ok(size)
+        }
     )]
     max_blob_size: ByteSize,
-
-    /// Maximum size of cached policy decisions in memory.
-    ///
-    /// Each entry is lightweight, so small allocations can hold a large number of entries.
-    #[arg(
-        long = "policy-cache-size",
-        env = "PORXIE_POLICY_CACHE_SIZE",
-        default_value = "256mb"
-    )]
-    policy_cache_size: ByteSize,
 
     /// How long policy decisions are cached before being re-checked.
     #[arg(
@@ -141,13 +161,13 @@ struct Arguments {
         env = "PORXIE_POLICY_SERVICE_HEADERS",
         value_delimiter = '|',
         requires = "policy_service_url",
-        value_parser = |s: &str| -> Result<(HeaderName, HeaderValue), String> {
-            let (name, value) = s.split_once(':')
-                .ok_or_else(|| format!("invalid header {s:?}: expected 'Name: value'"))?;
+        value_parser = |v: &str| -> Result<(HeaderName, HeaderValue), String> {
+            let (name, value) = v.split_once(':')
+                .ok_or_else(|| format!("invalid header {v:?}: expected 'Name: value'"))?;
             let name = HeaderName::try_from(name.trim())
-                .map_err(|e| format!("invalid header name in {s:?}: {e}"))?;
+                .map_err(|e| format!("invalid header name in {v:?}: {e}"))?;
             let mut value = HeaderValue::try_from(value.trim())
-                .map_err(|e| format!("invalid header value in {s:?}: {e}"))?;
+                .map_err(|e| format!("invalid header value in {v:?}: {e}"))?;
             value.set_sensitive(true);
             Ok((name, value))
         }
@@ -182,16 +202,6 @@ struct Arguments {
     )]
     plc_directory_url: Url,
 
-    /// Only allow HTTPS when connecting to upstreams.
-    ///
-    /// Disabling this is strongly discouraged.
-    #[arg(
-        long = "upstream-https-only",
-        env = "PORXIE_UPSTREAM_HTTPS_ONLY",
-        default_value_t = true
-    )]
-    upstream_https_only: core::primitive::bool,
-
     /// HTTP(S) proxy for upstream requests. Supports embedded credentials (https://user:pass@host).
     ///
     /// When unset, the system proxy configuration is used automatically.
@@ -214,22 +224,21 @@ struct Arguments {
 }
 
 struct AppState {
-    // Internals..
-    resolver: JacquardResolver,
+    // Core.
+    identity_resolver: JacquardResolver,
     internal_http_client: reqwest::Client,
     external_http_client: reqwest::Client,
-    // Auth.
+    cache: Caches,
+    // Authentication.
     auth_token: Option<String>,
-    // Content.
+    // Blobs handling.
     allowed_mimetypes: Vec<Mime>,
-    max_blob_size: u64,
+    max_blob_size: NonZeroU64,
     cache_control_header: HeaderValue,
-    response_cache: ResponseCache,
-    // Policy.
+    // Policy service.
     policy_service_url: Option<Url>,
     policy_service_headers: Vec<(HeaderName, HeaderValue)>,
     policy_service_fail_open: bool,
-    policy_cache: PolicyCache,
 }
 
 #[tokio::main]
@@ -241,13 +250,10 @@ async fn main() -> Result<()> {
     let args = Arguments::parse();
 
     // Setup state.
-    let external_http_client = build_external_http_client(
-        args.upstream_https_only,
-        args.upstream_timeout.into(),
-        args.upstream_proxy,
-    )?;
+    let external_http_client =
+        build_external_http_client(args.upstream_timeout.into(), args.upstream_proxy)?;
     let app_state = Arc::new(AppState {
-        resolver: JacquardResolver::new(
+        identity_resolver: JacquardResolver::new(
             external_http_client.clone(),
             ResolverOptions {
                 plc_source: PlcSource::PlcDirectory {
@@ -259,26 +265,25 @@ async fn main() -> Result<()> {
             },
         ),
         external_http_client,
-        internal_http_client: build_internal_http_client()?,
+        internal_http_client: build_internal_http_client(Duration::from_secs(15))?,
+        cache: build_caches(&CacheBuildOptions {
+            memory_capacity: args.cache_size.as_u64(),
+            policy_ttl: args.policy_cache_ttl.into(),
+        })?,
         auth_token: args.auth_token,
         allowed_mimetypes: args.allowed_mimetypes,
-        max_blob_size: args.max_blob_size.as_u64(),
+        max_blob_size: args.max_blob_size.as_u64().try_into()?,
         cache_control_header: args.cache_control_header_value,
-        response_cache: build_response_cache(args.cache_size.as_u64()),
         policy_service_url: args.policy_service_url,
         policy_service_headers: args.policy_service_headers,
         policy_service_fail_open: args.policy_service_fail_open,
-        policy_cache: build_policy_cache(
-            args.policy_cache_size.as_u64(),
-            args.policy_cache_ttl.into(),
-        ),
     });
 
     // Setup router.
     let router = Router::new()
         .route("/", get(get_index_handler))
         .route("/{did}/{cid}", get(get_blob_handler))
-        .route("/{did}/{cid}", delete(delete_blob_handler))
+        .route("/cache/{id}", delete(delete_cache_handler))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(trace::DefaultMakeSpan::new().level(Level::INFO))
