@@ -157,89 +157,40 @@ Options:
           [env: PORXIE_ADDRESS=]
           [default: 127.0.0.1:6314]
 
-      --timeout <TIMEOUT>
-          Maximum duration before incoming requests are timed out
+      --request-timeout <TIMEOUT>
+          Timeout applied to incoming requests
 
-          [env: PORXIE_TIMEOUT=]
-          [default: 60s]
+          [env: PORXIE_REQUEST_TIMEOUT=]
+          [default: 2m]
 
       --auth-token <AUTH_TOKEN>
-          Bearer token that authenticates admin requests.
+          Bearer token for authenticating admin requests.
 
-          When unset, all authenticated endpoints are unusable.
+          When unset, all authenticated endpoints will reject requests with HTTP 401.
 
           [env: PORXIE_AUTH_TOKEN=]
 
       --allowed-mimetypes <ALLOWED_MIMETYPES>
-          List of mimetypes that can be served through this CDN.
+          List of mimetypes that can be served.
 
-          Validation is done loosely via content inference and is not foolproof - it is recommended to apply a sandboxed layer that will process the blob further to validate its type.
+          Validation is done loosely via content inference, further validation can be done by using another layer that strictly processes content above this proxy, such as an image transformation service.
 
-          By default everything is allowed.
+          By default only image and video are allowed. Unknown blobs fall back to `application/octet-stream`, which also has to be explicitly enabled.
+
+          When using the CLI, the flag can be used multiple times. When setting via environment variable, values are comma-separated (e.g. `PORXIE_ALLOWED_MIMETYPES="video/*,image/*"`).
 
           [env: PORXIE_ALLOWED_MIMETYPES=]
-          [default: */*]
-
-      --cache-control-header <CACHE_CONTROL_HEADER_VALUE>
-          The Cache-Control header value to send alongside responses.
-
-          This header does not modify the internal cache lifetime of content, only how other clients are told to cache responses.
-
-          [env: PORXIE_CACHE_CONTROL_HEADER=]
-          [default: "public, max-age=604800, must-revalidate"]
-
-      --cache-size <CACHE_SIZE>
-          Total in-memory cache allocation size.
-
-          Content is evicted using a TinyLFU policy that automatically prioritises retaining the most frequently requested keys.
-
-          The default value is conservatively low; you may wish to raise it to fit your needs.
-
-          [env: PORXIE_CACHE_SIZE=]
-          [default: 512mb]
+          [default: video/* image/*]
 
       --max-blob-size <MAX_BLOB_SIZE>
-          Maximum blob size that can be served through this CDN.
+          Maximum blob size that can be served.
 
-          Content that exceeds this limit will return an HTTP 422 error.
+          Blobs that exceed this limit will return an HTTP 413 error.
+
+          Be aware that setting this value too high can lead to the process or system running out of memory, so adjust accordingly. The minimum max blob size is 512kb.
 
           [env: PORXIE_MAX_BLOB_SIZE=]
           [default: 50mb]
-
-      --policy-cache-ttl <POLICY_CACHE_TTL>
-          How long policy decisions are cached before being re-checked
-
-          [env: PORXIE_POLICY_CACHE_TTL=]
-          [default: 1h]
-
-      --policy-service-header <POLICY_SERVICE_HEADERS>
-          Headers sent alongside all requests to the policy service.
-
-          Each header must be in the format "Name: value". When using the CLI, the flag can be used multiple times. When setting via environment variable, headers are pipe-separated (|).
-
-          As pipes are used as a delimiter, they cannot be contained in headers.
-
-          Example (cli): '--policy-service-header "Authorization: 123" --policy-service-header "Cool-Header: Value"'
-
-          Example (env): 'PORXIE_POLICY_SERVICE_HEADERS="Authorization: 123|Cool-Header: Value"'
-
-          [env: PORXIE_POLICY_SERVICE_HEADERS=]
-
-      --policy-service-fail-open <POLICY_SERVICE_FAIL_OPEN>
-          Whether to allow requests to proceed if the policy service is unavailable or returns an unexpected status code
-
-          [env: PORXIE_POLICY_SERVICE_FAIL_OPEN=]
-          [default: false]
-          [possible values: true, false]
-
-      --policy-service-url <POLICY_SERVICE_URL>
-          URL of an upstream policy service that DID+CID pairs will be checked against.
-
-          Requests are sent as HTTP GET <url>/<did>/<cid>.
-
-          The service is expected to return HTTP 200 (OK) if permitted or HTTP 410 (GONE) if restricted.
-
-          [env: PORXIE_POLICY_SERVICE_URL=]
 
       --plc-directory-url <PLC_DIRECTORY_URL>
           URL of the PLC directory instance used for `did:plc` lookups.
@@ -250,14 +201,16 @@ Options:
           [default: https://plc.directory]
 
       --upstream-proxy <UPSTREAM_PROXY>
-          HTTP(S) proxy for upstream requests. Supports embedded credentials (https://user:pass@host).
+          HTTP(S) or SOCKS5(h) proxy for upstream requests. Supports embedded credentials (e.g. http://user:pass@host).
 
-          When unset, the system proxy configuration is used automatically.
+          When unset, the system's proxy configuration is used automatically.
 
           [env: PORXIE_UPSTREAM_PROXY=]
 
       --upstream-timeout <UPSTREAM_TIMEOUT>
-          Maximum duration before upstream requests are timed out
+          Maximum duration before upstream requests are timed out.
+
+          This value should be lower than --request-timeout to allow time for error handling.
 
           [env: PORXIE_UPSTREAM_TIMEOUT=]
           [default: 30s]
@@ -267,4 +220,77 @@ Options:
 
   -V, --version
           Print version
+
+Cache Options:
+      --cache-size <SIZE>
+          Total memory allocation for the internal cache.
+
+          Blobs are cached using an LFU policy, the most frequently requested blobs will be kept the longest when the cache begins to exceed its maximum size.
+
+          You may wish to adjust this to fit your needs.
+
+          It is recommended to use a CDN or caching layer in front of Porxie for production deployments for lower latency, better global availability and better response caching.
+
+          Be aware that setting this value too high can lead to the process or system running out of memory, so adjust accordingly. The minimum cache size is 8mb.
+
+          [env: PORXIE_CACHE_SIZE=]
+          [default: 512mb]
+
+      --blob-cache-ttl <CONTENT_TTL>
+          How long fetched blobs are cached before expiring
+
+          [env: PORXIE_BLOB_CACHE_TTL=]
+          [default: 7days]
+
+      --ownership-cache-ttl <OWNERSHIP_TTL>
+          How long blob ownership data is cached before being re-checked
+
+          [env: PORXIE_OWNERSHIP_CACHE_TTL=]
+          [default: 1day]
+
+      --policy-cache-ttl <POLICY_TTL>
+          How long policy decisions are cached before being re-checked
+
+          [env: PORXIE_POLICY_CACHE_TTL=]
+          [default: 1h]
+
+      --cache-control-header <CACHE_CONTROL_HEADER_VALUE>
+          The Cache-Control header value to send alongside responses.
+
+          This header does not modify internal cache lifetimes, only how other clients are instructed to cache responses (such as CDNs and browsers). You should adjust this according to your own infrastructure needs.
+
+          Be aware that you may also need to clear intermediary caches manually if you want a policy change to apply quickly.
+
+          [env: PORXIE_CACHE_CONTROL_HEADER=]
+          [default: "public, max-age=604800, must-revalidate, immutable"]
+
+Policy Service Options:
+      --policy-service-url <URL>
+          Policy service URL that DID+CID pairs will be checked against.
+
+          Requests are sent as HTTP GET <url>/<did>/<cid>.
+
+          The service is expected to return HTTP 200 (OK) if permitted or HTTP 410 (GONE) if restricted.
+
+          [env: PORXIE_POLICY_SERVICE_URL=]
+
+      --policy-service-headers <HEADERS>
+          Headers sent alongside all requests to the policy service.
+
+          Each header must be in the format "Name: value". When using the CLI, the flag can be used multiple times. When setting via environment variable, headers are pipe-separated (|).
+
+          As pipes are used as a delimiter, they cannot be contained in headers.
+
+          Example (cli): '--policy-service-headers "Authorization: Bearer token" --policy-service-headers "X-Api-Key: your-key"'
+
+          Example (env): 'PORXIE_POLICY_SERVICE_HEADERS="Authorization: Bearer token|X-Api-Key: your-key"'
+
+          [env: PORXIE_POLICY_SERVICE_HEADERS=]
+
+      --policy-service-fail-open
+          Allow requests to proceed if the policy service is unavailable or returns an unexpected status code.
+
+          Warning: enabling this means restricted blobs may be served when the policy service is unreachable.
+
+          [env: PORXIE_POLICY_SERVICE_FAIL_OPEN=]
 ```

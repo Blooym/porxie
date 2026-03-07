@@ -4,7 +4,16 @@ use reqwest::{Proxy, Url, redirect::Policy};
 use std::{num::NonZeroU64, time::Duration};
 use thiserror::Error;
 
-const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+const USER_AGENT: &str = concat!(
+    env!("CARGO_PKG_NAME"),
+    "/",
+    env!("CARGO_PKG_VERSION_MAJOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_MINOR"),
+    " (",
+    env!("CARGO_PKG_REPOSITORY"),
+    ")"
+);
 const MAX_REDIRECTS: usize = 5;
 
 #[inline]
@@ -13,6 +22,10 @@ pub fn build_internal_http_client(timeout: Duration) -> Result<reqwest::Client, 
         .user_agent(USER_AGENT)
         .https_only(false)
         .redirect(Policy::limited(MAX_REDIRECTS))
+        .gzip(true)
+        .brotli(true)
+        .zstd(true)
+        .deflate(true)
         .timeout(timeout)
         .build()
 }
@@ -26,6 +39,10 @@ pub fn build_external_http_client(
         .user_agent(USER_AGENT)
         .https_only(!cfg!(debug_assertions))
         .redirect(Policy::limited(MAX_REDIRECTS))
+        .gzip(true)
+        .brotli(true)
+        .zstd(true)
+        .deflate(true)
         .timeout(timeout);
 
     if let Some(proxy) = proxy_url {
@@ -36,23 +53,26 @@ pub fn build_external_http_client(
 }
 
 #[derive(Debug, Error)]
-pub enum BytesCappedError {
+pub enum BytesStreamCappedError {
+    /// The response content length exceeded the size limit.
     #[error("content exceeded the maximum size")]
     TooLarge,
+    /// An internal client error occured whilst processing the request,
+    /// see [`reqwest::Error`].
     #[error("an internal client error occured: {0}")]
     ClientError(#[from] reqwest::Error),
 }
 
 /// A wrapper around `Response::bytes_stream()` that acts like `Response::bytes()`
 /// but enforces a maximum size limit while streaming the response.
-pub async fn bytes_capped(
+pub async fn bytes_stream_capped(
     response: reqwest::Response,
     max_size: NonZeroU64,
-) -> Result<Bytes, BytesCappedError> {
+) -> Result<Bytes, BytesStreamCappedError> {
     if let Some(content_length) = response.content_length()
         && content_length > max_size.get()
     {
-        return Err(BytesCappedError::TooLarge);
+        return Err(BytesStreamCappedError::TooLarge);
     }
 
     let mut buffer = BytesMut::with_capacity(
@@ -63,9 +83,9 @@ pub async fn bytes_capped(
     );
     let mut stream = response.bytes_stream();
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(BytesCappedError::ClientError)?;
-        if (buffer.len() + chunk.len()) as u64 > max_size.get() {
-            return Err(BytesCappedError::TooLarge);
+        let chunk = chunk.map_err(BytesStreamCappedError::ClientError)?;
+        if buffer.len() as u64 + chunk.len() as u64 > max_size.get() {
+            return Err(BytesStreamCappedError::TooLarge);
         }
         buffer.extend_from_slice(&chunk);
     }

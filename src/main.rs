@@ -8,7 +8,7 @@ use crate::{
     http::{build_external_http_client, build_internal_http_client},
     routes::{delete_cache_handler, get_blob_handler, get_index_handler},
 };
-use ::mime::{Mime, STAR_STAR};
+use ::mime::Mime;
 use anyhow::Result;
 use axum::{
     Router,
@@ -18,7 +18,7 @@ use axum::{
     routing::{delete, get},
 };
 use bytesize::ByteSize;
-use clap::Parser;
+use clap::{Args, Parser};
 use dotenvy::dotenv;
 use jacquard_identity::{
     JacquardResolver,
@@ -36,9 +36,15 @@ use tower_http::{
 use tracing::{Level, info};
 use tracing_subscriber::EnvFilter;
 
-#[derive(Debug, Clone, Parser)]
-#[clap(author, about, long_about, version)]
-struct Arguments {
+#[derive(Parser)]
+#[clap(
+    author,
+    about,
+    version,
+    after_help = "* Use '--help' for additional information.",
+    after_long_help = concat!("* Refer to the project README found at ", env!("CARGO_PKG_REPOSITORY"), " for more guidance.")
+)]
+struct AppArgs {
     /// Socket address (IPv4 or IPv6) to bind the server to.
     #[arg(
         long = "address",
@@ -47,56 +53,52 @@ struct Arguments {
     )]
     address: SocketAddr,
 
-    /// Maximum duration before incoming requests are timed out.
-    #[arg(long = "timeout", env = "PORXIE_TIMEOUT", default_value = "60s")]
+    /// Timeout applied to incoming requests.
+    #[arg(
+        long = "request-timeout",
+        env = "PORXIE_REQUEST_TIMEOUT",
+        default_value = "2m"
+    )]
     timeout: humantime::Duration,
 
-    /// Bearer token that authenticates admin requests.
+    /// Bearer token for authenticating admin requests.
     ///
-    /// When unset, all authenticated endpoints are unusable.
+    /// When unset, all authenticated endpoints will reject requests with HTTP 401.
     #[arg(long = "auth-token", env = "PORXIE_AUTH_TOKEN")]
     auth_token: Option<String>,
 
-    /// List of mimetypes that can be served through this CDN.
+    /// List of mimetypes that can be served.
     ///
-    /// Validation is done loosely via content inference and is not foolproof -
-    /// it is recommended to apply a sandboxed layer that will process the blob
-    /// further to validate its type.
+    /// Validation is done loosely via content inference, further validation can be done by using another
+    /// layer that strictly processes content above this proxy, such as an image transformation service.
     ///
-    /// By default everything is allowed.
+    /// By default only image and video are allowed.
+    /// Unknown blobs fall back to `application/octet-stream`, which also has to be explicitly enabled.
+    ///
+    /// When using the CLI, the flag can be used multiple times. When setting via environment variable,
+    /// values are comma-separated (e.g. `PORXIE_ALLOWED_MIMETYPES="video/*,image/*"`).
     #[arg(
         long = "allowed-mimetypes",
         env = "PORXIE_ALLOWED_MIMETYPES",
-        default_values_t = [STAR_STAR],
+        default_values = ["video/*", "image/*"],
         value_delimiter = ','
     )]
     allowed_mimetypes: Vec<Mime>,
 
-    /// The Cache-Control header value to send alongside responses.
+    /// Maximum blob size that can be served.
     ///
-    /// This header does not modify the internal cache lifetime of content, only
-    /// how other clients are told to cache responses.
+    /// Blobs that exceed this limit will return an HTTP 413 error.
+    ///
+    /// Be aware that setting this value too high can lead to the process or system running out of memory, so adjust accordingly.
+    /// The minimum max blob size is 512kb.
     #[arg(
-        long = "cache-control-header",
-        env = "PORXIE_CACHE_CONTROL_HEADER",
-        default_value = "public, max-age=604800, must-revalidate"
-    )]
-    cache_control_header_value: HeaderValue,
-
-    /// Total in-memory cache allocation size.
-    ///
-    /// Content is evicted using a TinyLFU policy that automatically prioritises retaining
-    /// the most frequently requested keys.
-    ///
-    /// The default value is conservatively low; you may wish to raise it to fit your needs.
-    #[arg(
-        long = "cache-size",
-        env = "PORXIE_CACHE_SIZE",
-        default_value = "512mb",
+        long = "max-blob-size",
+        env = "PORXIE_MAX_BLOB_SIZE",
+        default_value = "50mb",
         value_parser = |v: &str| -> Result<ByteSize, String> {
             let size: ByteSize = v.parse().map_err(|e| format!("{e}"))?;
-            if size.as_u64() < 8_000_000 {
-                return Err("minimum cache size must be 8mb".to_string())
+            if size.as_u64() < 512_000 {
+                return Err("minimum allowed value is 512kb".to_string())
             }
 
             let total_mem = sysinfo::System::new_with_specifics(
@@ -104,31 +106,7 @@ struct Arguments {
             ).total_memory();
             if size.as_u64() > total_mem {
                 return Err(format!(
-                    "exceeds total system memory ({}) and could cause the process or system to crash",
-                    ByteSize(total_mem).display().si(),
-                ));
-            }
-
-            Ok(size)
-        }
-    )]
-    cache_size: ByteSize,
-
-    /// Maximum blob size that can be served through this CDN.
-    ///
-    /// Content that exceeds this limit will return an HTTP 422 error.
-    #[arg(
-        long = "max-blob-size",
-        env = "PORXIE_MAX_BLOB_SIZE",
-        default_value = "50mb",
-        value_parser = |v: &str| -> Result<ByteSize, String> {
-            let size: ByteSize = v.parse().map_err(|e| format!("{e}"))?;
-            let total_mem = sysinfo::System::new_with_specifics(
-                sysinfo::RefreshKind::nothing().with_memory(sysinfo::MemoryRefreshKind::everything()),
-            ).total_memory().div_euclid(2);
-            if size.as_u64() > total_mem {
-                return Err(format!(
-                    "exceeds total system memory ({}) and could cause the process or system to crash",
+                    "exceeds total system memory ({}) and could cause system instability",
                     ByteSize(total_mem).display().si(),
                 ));
             }
@@ -137,60 +115,6 @@ struct Arguments {
         }
     )]
     max_blob_size: ByteSize,
-
-    /// How long policy decisions are cached before being re-checked.
-    #[arg(
-        long = "policy-cache-ttl",
-        env = "PORXIE_POLICY_CACHE_TTL",
-        default_value = "1h"
-    )]
-    policy_cache_ttl: humantime::Duration,
-
-    /// Headers sent alongside all requests to the policy service.
-    ///
-    /// Each header must be in the format "Name: value". When using the CLI, the flag can be used multiple times.
-    /// When setting via environment variable, headers are pipe-separated (|).
-    ///
-    /// As pipes are used as a delimiter, they cannot be contained in headers.
-    ///
-    /// Example (cli): '--policy-service-header "Authorization: 123" --policy-service-header "Cool-Header: Value"'
-    ///
-    /// Example (env): 'PORXIE_POLICY_SERVICE_HEADERS="Authorization: 123|Cool-Header: Value"'
-    #[arg(
-        long = "policy-service-header",
-        env = "PORXIE_POLICY_SERVICE_HEADERS",
-        value_delimiter = '|',
-        requires = "policy_service_url",
-        value_parser = |v: &str| -> Result<(HeaderName, HeaderValue), String> {
-            let (name, value) = v.split_once(':')
-                .ok_or_else(|| format!("invalid header {v:?}: expected 'Name: value'"))?;
-            let name = HeaderName::try_from(name.trim())
-                .map_err(|e| format!("invalid header name in {v:?}: {e}"))?;
-            let mut value = HeaderValue::try_from(value.trim())
-                .map_err(|e| format!("invalid header value in {v:?}: {e}"))?;
-            value.set_sensitive(true);
-            Ok((name, value))
-        }
-    )]
-    policy_service_headers: Vec<(HeaderName, HeaderValue)>,
-
-    /// Whether to allow requests to proceed if the policy service is unavailable or returns an
-    /// unexpected status code.
-    #[arg(
-        long = "policy-service-fail-open",
-        env = "PORXIE_POLICY_SERVICE_FAIL_OPEN",
-        default_value_t = false,
-        requires = "policy_service_url"
-    )]
-    policy_service_fail_open: core::primitive::bool,
-
-    /// URL of an upstream policy service that DID+CID pairs will be checked against.
-    ///
-    /// Requests are sent as HTTP GET <url>/<did>/<cid>.
-    ///
-    /// The service is expected to return HTTP 200 (OK) if permitted or HTTP 410 (GONE) if restricted.
-    #[arg(long = "policy-service-url", env = "PORXIE_POLICY_SERVICE_URL")]
-    policy_service_url: Option<Url>,
 
     /// URL of the PLC directory instance used for `did:plc` lookups.
     ///
@@ -202,25 +126,162 @@ struct Arguments {
     )]
     plc_directory_url: Url,
 
-    /// HTTP(S) proxy for upstream requests. Supports embedded credentials (https://user:pass@host).
+    /// HTTP(S) or SOCKS5(h) proxy for upstream requests. Supports embedded credentials (e.g. http://user:pass@host).
     ///
-    /// When unset, the system proxy configuration is used automatically.
+    /// When unset, the system's proxy configuration is used automatically.
     #[arg(long = "upstream-proxy", env = "PORXIE_UPSTREAM_PROXY", value_parser = |v: &str| {
         let url = Url::parse(v).map_err(|e| e.to_string())?;
-        if !matches!(url.scheme(), "http" | "https") {
-            return Err("proxy URL must use http:// or https://".to_string());
+        if !matches!(url.scheme(), "http" | "https" |"socks5" | "socks5h") {
+            return Err("proxy URL must use http://, https://, socks5://, or socks5h://".to_string());
         }
         Ok(url)
     })]
     upstream_proxy: Option<Url>,
 
     /// Maximum duration before upstream requests are timed out.
+    ///
+    /// This value should be lower than --request-timeout to allow time for error handling.
     #[arg(
         long = "upstream-timeout",
         env = "PORXIE_UPSTREAM_TIMEOUT",
         default_value = "30s"
     )]
     upstream_timeout: humantime::Duration,
+
+    #[command(flatten)]
+    cache: CacheArgs,
+
+    #[command(flatten)]
+    policy: PolicyServiceArgs,
+}
+
+#[derive(Args)]
+#[command(next_help_heading = "Cache Options")]
+struct CacheArgs {
+    /// Total memory allocation for the internal cache.
+    ///
+    /// Blobs are cached using an LFU policy, the most frequently requested blobs will be kept the longest
+    /// when the cache begins to exceed its maximum size.
+    ///
+    /// You may wish to adjust this to fit your needs.
+    ///
+    /// It is recommended to use a CDN or caching layer in front of Porxie for production deployments for lower
+    /// latency, better global availability and better response caching.
+    ///
+    /// Be aware that setting this value too high can lead to the process or system running out of memory, so adjust accordingly.
+    /// The minimum cache size is 8mb.
+    #[arg(
+        long = "cache-size",
+        env = "PORXIE_CACHE_SIZE",
+        default_value = "512mb",
+        value_parser = |v: &str| -> Result<ByteSize, String> {
+            let size: ByteSize = v.parse().map_err(|e| format!("{e}"))?;
+            if size.as_u64() < 8_000_000 {
+                return Err("minimum allowed value is 8mb".to_string())
+            }
+
+            let total_mem = sysinfo::System::new_with_specifics(
+                sysinfo::RefreshKind::nothing().with_memory(sysinfo::MemoryRefreshKind::everything()),
+            ).total_memory();
+            if size.as_u64() > total_mem {
+                return Err(format!(
+                    "exceeds total system memory ({}) and could cause system instability",
+                    ByteSize(total_mem).display().si(),
+                ));
+            }
+
+            Ok(size)
+        }
+    )]
+    size: ByteSize,
+
+    /// How long fetched blobs are cached before expiring.
+    #[arg(
+        long = "blob-cache-ttl",
+        env = "PORXIE_BLOB_CACHE_TTL",
+        default_value = "7days"
+    )]
+    content_ttl: humantime::Duration,
+
+    /// How long blob ownership data is cached before being re-checked.
+    #[arg(
+        long = "ownership-cache-ttl",
+        env = "PORXIE_OWNERSHIP_CACHE_TTL",
+        default_value = "1day"
+    )]
+    ownership_ttl: humantime::Duration,
+
+    /// How long policy decisions are cached before being re-checked.
+    #[arg(
+        long = "policy-cache-ttl",
+        env = "PORXIE_POLICY_CACHE_TTL",
+        default_value = "1h"
+    )]
+    policy_ttl: humantime::Duration,
+
+    /// The Cache-Control header value to send alongside responses.
+    ///
+    /// This header does not modify internal cache lifetimes, only how other clients are instructed to cache responses
+    /// (such as CDNs and browsers). You should adjust this according to your own infrastructure needs.
+    ///
+    /// Be aware that you may also need to clear intermediary caches manually if you want a policy change to apply quickly.
+    #[arg(
+        long = "cache-control-header",
+        env = "PORXIE_CACHE_CONTROL_HEADER",
+        default_value = "public, max-age=604800, must-revalidate, immutable"
+    )]
+    cache_control_header_value: HeaderValue,
+}
+
+#[derive(Args)]
+#[command(next_help_heading = "Policy Service Options")]
+struct PolicyServiceArgs {
+    /// Policy service URL that DID+CID pairs will be checked against.
+    ///
+    /// Requests are sent as HTTP GET <url>/<did>/<cid>.
+    ///
+    /// The service is expected to return HTTP 200 (OK) if permitted or HTTP 410 (GONE) if restricted.
+    #[arg(long = "policy-service-url", env = "PORXIE_POLICY_SERVICE_URL")]
+    url: Option<Url>,
+
+    /// Headers sent alongside all requests to the policy service.
+    ///
+    /// Each header must be in the format "Name: value". When using the CLI, the flag can be used multiple times.
+    /// When setting via environment variable, headers are pipe-separated (|).
+    ///
+    /// As pipes are used as a delimiter, they cannot be contained in headers.
+    ///
+    /// Example (cli): '--policy-service-headers "Authorization: Bearer token" --policy-service-headers "X-Api-Key: your-key"'
+    ///
+    /// Example (env): 'PORXIE_POLICY_SERVICE_HEADERS="Authorization: Bearer token|X-Api-Key: your-key"'
+    #[arg(
+        long = "policy-service-headers",
+        env = "PORXIE_POLICY_SERVICE_HEADERS",
+        value_delimiter = '|',
+        requires = "url",
+        value_parser = |v: &str| -> Result<(HeaderName, HeaderValue), String> {
+            let (name, value) = v.split_once(':')
+                .ok_or_else(|| format!("invalid header {v:?}: expected 'Name: value'"))?;
+            let name = HeaderName::try_from(name.trim())
+                .map_err(|e| format!("invalid header name in {v:?}: {e}"))?;
+            let mut value = HeaderValue::try_from(value.trim())
+                .map_err(|e| format!("invalid header value in {v:?}: {e}"))?;
+            value.set_sensitive(true);
+            Ok((name, value))
+        }
+    )]
+    headers: Vec<(HeaderName, HeaderValue)>,
+
+    /// Allow requests to proceed if the policy service is unavailable or returns an
+    /// unexpected status code.
+    ///
+    /// Warning: enabling this means restricted blobs may be served when the policy service is unreachable.
+    #[arg(
+        long = "policy-service-fail-open",
+        env = "PORXIE_POLICY_SERVICE_FAIL_OPEN",
+        requires = "url"
+    )]
+    fail_open: bool,
 }
 
 struct AppState {
@@ -247,7 +308,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new("info")))
         .init();
-    let args = Arguments::parse();
+    let args = AppArgs::parse();
 
     // Setup state.
     let external_http_client =
@@ -267,16 +328,18 @@ async fn main() -> Result<()> {
         external_http_client,
         internal_http_client: build_internal_http_client(Duration::from_secs(15))?,
         cache: build_caches(&CacheBuildOptions {
-            memory_capacity: args.cache_size.as_u64(),
-            policy_ttl: args.policy_cache_ttl.into(),
+            memory_capacity: args.cache.size.as_u64(),
+            blob_content_ttl: args.cache.content_ttl.into(),
+            blob_ownership_ttl: args.cache.ownership_ttl.into(),
+            blob_policy_ttl: args.cache.policy_ttl.into(),
         })?,
         auth_token: args.auth_token,
         allowed_mimetypes: args.allowed_mimetypes,
         max_blob_size: args.max_blob_size.as_u64().try_into()?,
-        cache_control_header: args.cache_control_header_value,
-        policy_service_url: args.policy_service_url,
-        policy_service_headers: args.policy_service_headers,
-        policy_service_fail_open: args.policy_service_fail_open,
+        cache_control_header: args.cache.cache_control_header_value,
+        policy_service_url: args.policy.url,
+        policy_service_headers: args.policy.headers,
+        policy_service_fail_open: args.policy.fail_open,
     });
 
     // Setup router.
@@ -299,13 +362,12 @@ async fn main() -> Result<()> {
         ))
         .layer(axum_middleware::from_fn(
             async |req: Request, next: Next| {
+                const SERVER_HV: HeaderValue = HeaderValue::from_static(env!("CARGO_PKG_NAME"));
+                const ROBOTS_HV: HeaderValue = HeaderValue::from_static("none");
                 let mut res = next.run(req).await;
                 let res_headers = res.headers_mut();
-                res_headers.insert(
-                    header::SERVER,
-                    HeaderValue::from_static(env!("CARGO_PKG_NAME")),
-                );
-                res_headers.insert("X-Robots-Tag", HeaderValue::from_static("none"));
+                res_headers.insert(header::SERVER, SERVER_HV);
+                res_headers.insert("X-Robots-Tag", ROBOTS_HV);
                 res
             },
         ))

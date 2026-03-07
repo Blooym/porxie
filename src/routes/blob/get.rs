@@ -1,7 +1,7 @@
-use crate::http::{BytesCappedError, bytes_capped};
+use crate::http::{BytesStreamCappedError, bytes_stream_capped};
 use crate::{
     AppState,
-    cache::{CachedBlobData, CachedPolicy},
+    cache::{CachedBlobData, CachedBlobPolicy},
     mime::is_mime_allowed,
 };
 use axum::{
@@ -12,7 +12,6 @@ use axum::{
 use cid::Cid;
 use jacquard_common::types::did::Did;
 use jacquard_identity::resolver::{IdentityError, IdentityResolver};
-use mime::Mime;
 use multihash_codetable::{Code, MultihashDigest};
 use reqwest::Url;
 use std::sync::Arc;
@@ -101,7 +100,7 @@ pub async fn get_blob_handler(
     if let Some(ref policy_service_url) = state.policy_service_url {
         match state
             .cache
-            .policy
+            .blob_policy
             .try_get_with_by_ref(&(did.clone(), cid), async {
                 tracing::debug!("querying policy service for the status of blob");
 
@@ -121,13 +120,13 @@ pub async fn get_blob_handler(
                     Ok(response) => match response.status() {
                         StatusCode::OK => {
                             tracing::debug!("policy service returned 200 status, can serve blob");
-                            Ok(CachedPolicy { can_serve: true })
+                            Ok(CachedBlobPolicy { can_serve: true })
                         }
                         StatusCode::GONE => {
                             tracing::debug!(
                                 "policy service returned 410 status, cannot serve blob"
                             );
-                            Ok(CachedPolicy { can_serve: false })
+                            Ok(CachedBlobPolicy { can_serve: false })
                         }
                         status => {
                             tracing::error!("policy service returned unexpected status: {status}");
@@ -158,22 +157,20 @@ pub async fn get_blob_handler(
         }
     }
 
-    // Fetch from upstream or cache; concurrent requests for the same key are coalesced.
-    //
-    // If the initial request fails, another pending request will run instead - this
-    // process will continue until the first request succeeds or all have failed.
+    // Serve from cache, or fetch from upstream. Concurrent requests for the same key are
+    // coalesced — if the initial fetch fails, the next pending request will try instead,
+    // continuing until one succeeds or all have failed.
     let blob = match state
         .cache
-        .content
+        .blob_content
         .try_get_with_by_ref(&cid, async {
             tracing::debug!("fetching blob from PDS");
+            let blob_url = get_blob_url(&state, &did, &cid).await.map_err(|err| {
+                tracing::debug!("failed to resolve PDS: {err:?}");
+                BlobDownloadError::DidPdsResolutionFailure
+            })?;
 
-            let bytes = {
-                let blob_url = get_blob_url(&state, &did, &cid).await.map_err(|err| {
-                    tracing::debug!("failed to resolve PDS: {err:?}");
-                    BlobDownloadError::DidPdsResolutionFailure
-                })?;
-
+            let validated_bytes = {
                 let response = state
                     .external_http_client
                     .get(blob_url)
@@ -189,54 +186,69 @@ pub async fn get_blob_handler(
                     // Note: Bluesky's PDS implemenation sends 400 instead of 404 when a blob is
                     // not found. This will skip the 404 handler and instead count as an error.
                     // This is not our responsibility to work around as other implementations do it right.
-                    if response.status() == StatusCode::NOT_FOUND {
-                        tracing::debug!("pds returned 404 for blob");
-                        return Err(BlobDownloadError::NotFound);
-                    }
-                    tracing::debug!("pds returned error status for blob: {}", response.status());
-                    return Err(BlobDownloadError::ErrorStatusCode);
+                    return Err(match response.status() {
+                        StatusCode::NOT_FOUND => {
+                            tracing::debug!("pds returned 404 for blob");
+                            BlobDownloadError::NotFound
+                        }
+                        status => {
+                            tracing::debug!("pds returned error status for blob: {status}");
+                            BlobDownloadError::ErrorStatusCode
+                        }
+                    });
                 }
 
-                // Stream into buffer, enforcing size limit.
-                let bytes = bytes_capped(response, state.max_blob_size)
+                // Download bytes as a stream, enforcing a max size limit
+                // and aborting if it's crossed.
+                let bytes = bytes_stream_capped(response, state.max_blob_size)
                     .await
                     .map_err(|err| match err {
-                        BytesCappedError::TooLarge => {
+                        BytesStreamCappedError::TooLarge => {
                             tracing::debug!(
                                 "blob exceeds max size of {} bytes",
                                 state.max_blob_size
                             );
                             BlobDownloadError::TooLarge
                         }
-                        BytesCappedError::ClientError(err) => {
+                        BytesStreamCappedError::ClientError(err) => {
                             tracing::warn!("error reading blob stream: {err:?}");
                             BlobDownloadError::StreamFailed
                         }
                     })?;
 
-                // Verify downloaded content matches the requested CID.
-                // Enabled Multihashes are set in the multihash-codetable crate features.
-                let computed_cid = {
-                    const RAW_CODEC: u64 = 0x55;
-                    match Code::try_from(cid.hash().code()) {
-                        Ok(code) => Cid::new_v1(RAW_CODEC, code.digest(&bytes)),
-                        Err(err) => {
-                            tracing::warn!("failed to compute CID: {err:?}");
-                            return Err(BlobDownloadError::CidUnsupportedMultihash);
+                // Verify request CID matches the blob's computed CID.
+                //
+                // This operation is done via spawn_blocking as creating the digest will block
+                // this task's executor from switching to other tasks for as long it runs.
+                tokio::task::spawn_blocking({
+                    let bytes = bytes.clone();
+                    move || {
+                        // Enabled Multihashes are set in the multihash-codetable crate features.
+                        let computed_cid = match Code::try_from(cid.hash().code()) {
+                            Ok(code) => Ok(Cid::new_v1(0x55, code.digest(&bytes))),
+                            Err(err) => {
+                                tracing::warn!("failed to compute CID: {err:?}");
+                                Err(BlobDownloadError::CidUnsupportedMultihash)
+                            }
+                        }?;
+
+                        if computed_cid != cid {
+                            tracing::warn!("cid mismatch: computed {computed_cid} expected {cid}");
+                            return Err(BlobDownloadError::CidMismatch);
                         }
+
+                        Ok(())
                     }
-                };
-                if computed_cid != cid {
-                    tracing::warn!("cid mismatch: computed {computed_cid} expected {cid}");
-                    return Err(BlobDownloadError::CidMismatch);
-                }
+                })
+                .await
+                .expect("CID computing task should not panic")?;
 
                 bytes
             };
 
             // Infer MIME type from content bytes rather than headers; this is imperfect
             // and falls back to application/octet-stream if the type is unrecognised.
-            let mime_type: Mime = match infer::get(&bytes) {
+            let mime_type = match infer::get(&validated_bytes) {
                 Some(m) => m
                     .mime_type()
                     .parse()
@@ -249,9 +261,6 @@ pub async fn get_blob_handler(
             }
 
             // Build reusable cached headers.
-            const CSP_HV: HeaderValue = HeaderValue::from_static("default-src 'none'; sandbox");
-            const NOSNIFF_HV: HeaderValue = HeaderValue::from_static("nosniff");
-            const CODI_HV: HeaderValue = HeaderValue::from_static("attachment");
             let mut headers = HeaderMap::new();
             headers.insert(
                 header::CONTENT_TYPE,
@@ -261,14 +270,30 @@ pub async fn get_blob_handler(
                     .expect("should parse mime type as header value"),
             );
             headers.insert(header::CACHE_CONTROL, state.cache_control_header.clone());
-            headers.insert(header::CONTENT_SECURITY_POLICY, CSP_HV);
-            headers.insert(header::X_CONTENT_TYPE_OPTIONS, NOSNIFF_HV);
-            headers.insert(header::CONTENT_DISPOSITION, CODI_HV);
+            headers.insert(
+                header::CONTENT_SECURITY_POLICY,
+                const { HeaderValue::from_static("default-src 'none'; sandbox") },
+            );
+            headers.insert(
+                header::X_CONTENT_TYPE_OPTIONS,
+                const { HeaderValue::from_static("nosniff") },
+            );
+            headers.insert(
+                header::CONTENT_DISPOSITION,
+                const { HeaderValue::from_static("attachment") },
+            );
 
             // Mark this key as verified in the the ownership cache.
-            state.cache.ownership.insert((cid, did.clone()), ()).await;
+            state
+                .cache
+                .blob_ownership
+                .insert((cid, did.clone()), ())
+                .await;
 
-            Ok(CachedBlobData { bytes, headers })
+            Ok(CachedBlobData {
+                bytes: validated_bytes,
+                headers,
+            })
         })
         .await
     {
@@ -305,7 +330,7 @@ pub async fn get_blob_handler(
     // Concurrent requests for the same key are coalesced.
     if let Err(err) = state
         .cache
-        .ownership
+        .blob_ownership
         .try_get_with((cid, did.clone()), async {
             tracing::debug!("verifying ownership of blob");
             let blob_url = get_blob_url(&state, &did, &cid).await.map_err(|err| {
@@ -318,11 +343,13 @@ pub async fn get_blob_handler(
             // While some PDS implementations (bsky, tranquil) support HTTP HEAD, it is not
             // actually apart of the XRPC specification and we cannot rely on it (for now).
             // Use a range request to avoid downloading the full body on servers that support it instead.
-            const RANGE_HV: HeaderValue = HeaderValue::from_static("bytes=0-1");
             match state
                 .external_http_client
                 .get(blob_url)
-                .header(header::RANGE, RANGE_HV)
+                .header(
+                    header::RANGE,
+                    const { HeaderValue::from_static("bytes=0-1") },
+                )
                 .send()
                 .await
                 .map_err(|err| {

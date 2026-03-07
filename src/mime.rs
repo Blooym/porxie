@@ -1,7 +1,7 @@
 use mime::Mime;
 
 pub fn is_mime_allowed(mime: &Mime, allowed: &[Mime]) -> bool {
-    const WILDCARD: &str = "*";
+    const STAR: &str = "*";
 
     if allowed.is_empty() {
         return false;
@@ -9,12 +9,12 @@ pub fn is_mime_allowed(mime: &Mime, allowed: &[Mime]) -> bool {
 
     for allowed_mime in allowed {
         // MIME is '*/*', allow everything.
-        if allowed_mime.type_() == WILDCARD && allowed_mime.subtype() == WILDCARD {
+        if allowed_mime.type_() == STAR && allowed_mime.subtype() == STAR {
             return true;
         }
 
         // MIME subtype is *, allow if the type matches.
-        if allowed_mime.subtype() == WILDCARD && allowed_mime.type_() == mime.type_() {
+        if allowed_mime.subtype() == STAR && allowed_mime.type_() == mime.type_() {
             return true;
         }
 

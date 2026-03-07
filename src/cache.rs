@@ -16,8 +16,14 @@ pub struct CachedBlobData {
     pub headers: HeaderMap,
 }
 
-fn build_blob_content_cache(mem_capacity: u64) -> BlobContentCache {
+fn build_blob_content_cache(mem_capacity: u64, ttl: Duration) -> BlobContentCache {
+    tracing::debug!(
+        "building blob content cache with a mem_capacity of {mem_capacity} bytes and a ttl of {}s",
+        ttl.as_secs()
+    );
+
     BlobContentCache::builder()
+        .name("blob-content")
         .weigher(|_key, value: &CachedBlobData| -> u32 {
             (value.bytes.len() as u64 + value.headers.len() as u64 * 64)
                 .try_into()
@@ -25,6 +31,7 @@ fn build_blob_content_cache(mem_capacity: u64) -> BlobContentCache {
         })
         .eviction_policy(EvictionPolicy::tiny_lfu())
         .max_capacity(mem_capacity)
+        .time_to_idle(ttl)
         .build()
 }
 
@@ -32,8 +39,14 @@ fn build_blob_content_cache(mem_capacity: u64) -> BlobContentCache {
 
 type BlobOwnershipCache = MokaCache<(Cid, Did<'static>), ()>;
 
-fn build_blob_ownership_cache(mem_capacity: u64) -> BlobOwnershipCache {
+fn build_blob_ownership_cache(mem_capacity: u64, ttl: Duration) -> BlobOwnershipCache {
+    tracing::debug!(
+        "building blob ownership cache with a mem_capacity of {mem_capacity} bytes and a ttl of {}s",
+        ttl.as_secs()
+    );
+
     BlobOwnershipCache::builder()
+        .name("blob-ownership")
         .weigher(|key, _value| -> u32 {
             (key.0.encoded_len() + key.1.len())
                 .try_into()
@@ -41,22 +54,28 @@ fn build_blob_ownership_cache(mem_capacity: u64) -> BlobOwnershipCache {
         })
         .eviction_policy(EvictionPolicy::tiny_lfu())
         .max_capacity(mem_capacity)
-        .time_to_live(Duration::from_hours(1))
+        .time_to_live(ttl)
         .support_invalidation_closures()
         .build()
 }
 
 // Policy Cache
 
-type PolicyCache = MokaCache<(Did<'static>, Cid), CachedPolicy>;
+type BlobPolicyCache = MokaCache<(Did<'static>, Cid), CachedBlobPolicy>;
 
 #[derive(Debug, Copy, Clone)]
-pub struct CachedPolicy {
+pub struct CachedBlobPolicy {
     pub can_serve: bool,
 }
 
-pub fn build_policy_cache(mem_capacity: u64, ttl: Duration) -> PolicyCache {
-    PolicyCache::builder()
+pub fn build_blob_policy_cache(mem_capacity: u64, ttl: Duration) -> BlobPolicyCache {
+    tracing::debug!(
+        "building blob policy cache with a mem_capacity of {mem_capacity} bytes and a ttl of {}s",
+        ttl.as_secs()
+    );
+
+    BlobPolicyCache::builder()
+        .name("blob-policy")
         .weigher(|key, _value| -> u32 {
             (key.0.len() + key.1.encoded_len())
                 .try_into()
@@ -72,19 +91,20 @@ pub fn build_policy_cache(mem_capacity: u64, ttl: Duration) -> PolicyCache {
 // Builder
 
 pub struct Caches {
-    pub content: BlobContentCache,
-    pub ownership: BlobOwnershipCache,
-    pub policy: PolicyCache,
+    pub blob_content: BlobContentCache,
+    pub blob_ownership: BlobOwnershipCache,
+    pub blob_policy: BlobPolicyCache,
 }
 
 pub struct CacheBuildOptions {
     pub memory_capacity: u64,
-    pub policy_ttl: Duration,
+    pub blob_content_ttl: Duration,
+    pub blob_ownership_ttl: Duration,
+    pub blob_policy_ttl: Duration,
 }
 
 pub fn build_caches(options: &CacheBuildOptions) -> Result<Caches> {
     let sizes = {
-        #[derive(Debug)]
         struct CacheSizes {
             pub blob: u64,
             pub ownership: u64,
@@ -103,11 +123,9 @@ pub fn build_caches(options: &CacheBuildOptions) -> Result<Caches> {
         }
     };
 
-    tracing::debug!("Building with {sizes:?}",);
-
     Ok(Caches {
-        content: build_blob_content_cache(sizes.blob),
-        ownership: build_blob_ownership_cache(sizes.ownership),
-        policy: build_policy_cache(sizes.policy, options.policy_ttl),
+        blob_content: build_blob_content_cache(sizes.blob, options.blob_content_ttl),
+        blob_ownership: build_blob_ownership_cache(sizes.ownership, options.blob_ownership_ttl),
+        blob_policy: build_blob_policy_cache(sizes.policy, options.blob_policy_ttl),
     })
 }

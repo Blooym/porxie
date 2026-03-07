@@ -29,11 +29,14 @@ pub async fn delete_cache_handler(
             )
         })?;
 
-        let did_clone = did.clone();
+        // Clear all ownership and policy data for this DID.
         state
             .cache
-            .policy
-            .invalidate_entries_if(move |k, _v| k.0 == did_clone)
+            .blob_policy
+            .invalidate_entries_if({
+                let did = did.clone();
+                move |k, _v| k.0 == did
+            })
             .map_err(|_| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -42,7 +45,7 @@ pub async fn delete_cache_handler(
             })?;
         state
             .cache
-            .ownership
+            .blob_ownership
             .invalidate_entries_if(move |k, _v| k.1 == did)
             .map_err(|_| {
                 (
@@ -59,10 +62,11 @@ pub async fn delete_cache_handler(
             )
         })?;
 
-        state.cache.content.invalidate(&cid).await;
+        // Clear blob content from memory as well as ownership and policy data for this CID.
+        state.cache.blob_content.invalidate(&cid).await;
         state
             .cache
-            .ownership
+            .blob_ownership
             .invalidate_entries_if(move |k, _v| k.0 == cid)
             .map_err(|_| {
                 (
@@ -72,7 +76,7 @@ pub async fn delete_cache_handler(
             })?;
         state
             .cache
-            .policy
+            .blob_policy
             .invalidate_entries_if(move |k, _v| k.1 == cid)
             .map_err(|_| {
                 (
