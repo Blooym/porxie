@@ -5,6 +5,13 @@ pub use blob::get_blob_handler;
 pub use cache::delete_cache_handler;
 
 use axum::http::{HeaderName, HeaderValue, header};
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub struct ErrorResponse {
+    error: &'static str,
+    message: Option<&'static str>,
+}
 
 pub async fn get_index_handler() -> ([(HeaderName, HeaderValue); 1], &'static str) {
     (

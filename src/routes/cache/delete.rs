@@ -1,5 +1,6 @@
-use crate::AppState;
+use crate::{AppState, routes::ErrorResponse};
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
 };
@@ -15,17 +16,26 @@ pub async fn delete_cache_handler(
     Path(identifier): Path<String>,
     State(state): State<Arc<AppState>>,
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
-) -> Result<StatusCode, (StatusCode, &'static str)> {
+) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
     if state.auth_token.as_deref() != Some(bearer.token()) {
-        return Err((StatusCode::UNAUTHORIZED, "Unauthorized"));
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Unauthorized",
+                message: None,
+            }),
+        ));
     }
 
     if identifier.starts_with("did:") {
-        tracing::info!("invalidating DID cache entries'");
+        tracing::info!("invalidating DID cache entries");
         let did = Did::new_owned(identifier).map_err(|_| {
             (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "Invalid or unprocessable DID",
+                Json(ErrorResponse {
+                    error: "MalformedDid",
+                    message: Some("Invalid or unprocessable DID"),
+                }),
             )
         })?;
 
@@ -37,20 +47,28 @@ pub async fn delete_cache_handler(
                 let did = did.clone();
                 move |k, _v| k.0 == did
             })
-            .map_err(|_| {
+            .map_err(|err| {
+                tracing::error!("failed to invalid entries: {err:?}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to schedule cache invalidation",
+                    Json(ErrorResponse {
+                        error: "InternalServerError",
+                        message: Some("Failed to schedule cache invalidation"),
+                    }),
                 )
             })?;
         state
             .cache
             .blob_ownership
             .invalidate_entries_if(move |k, _v| k.1 == did)
-            .map_err(|_| {
+            .map_err(|err| {
+                tracing::error!("failed to invalid entries: {err:?}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to schedule cache invalidation",
+                    Json(ErrorResponse {
+                        error: "InternalServerError",
+                        message: Some("Failed to schedule cache invalidation"),
+                    }),
                 )
             })?;
     } else {
@@ -58,7 +76,10 @@ pub async fn delete_cache_handler(
         let cid = Cid::try_from(identifier.as_str()).map_err(|_| {
             (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "Invalid or unprocessable CID",
+                Json(ErrorResponse {
+                    error: "MalformedCid",
+                    message: Some("Invalid or unprocessable CID"),
+                }),
             )
         })?;
 
@@ -68,20 +89,28 @@ pub async fn delete_cache_handler(
             .cache
             .blob_ownership
             .invalidate_entries_if(move |k, _v| k.0 == cid)
-            .map_err(|_| {
+            .map_err(|err| {
+                tracing::error!("failed to invalid entries: {err:?}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to schedule cache invalidation",
+                    Json(ErrorResponse {
+                        error: "InternalServerError",
+                        message: Some("Failed to schedule cache invalidation"),
+                    }),
                 )
             })?;
         state
             .cache
             .blob_policy
             .invalidate_entries_if(move |k, _v| k.1 == cid)
-            .map_err(|_| {
+            .map_err(|err| {
+                tracing::error!("failed to invalid entries: {err:?}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to schedule cache invalidation",
+                    Json(ErrorResponse {
+                        error: "InternalServerError",
+                        message: Some("Failed to schedule cache invalidation"),
+                    }),
                 )
             })?;
     }

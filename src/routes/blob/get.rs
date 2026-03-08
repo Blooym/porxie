@@ -1,9 +1,11 @@
 use crate::http::{BytesStreamCappedError, bytes_stream_capped};
+use crate::routes::ErrorResponse;
 use crate::{
     AppState,
     cache::{CachedBlobData, CachedBlobPolicy},
     mime::is_mime_allowed,
 };
+use axum::Json;
 use axum::{
     body::Body,
     extract::{Path, State},
@@ -60,28 +62,35 @@ enum BlobOwnershipError {
     FetchFailure,
 }
 
-/// Resolve the given DID to a PDS URL and then build the `/xrpc/com.atproto.sync.getBlob` url for the DID+CID.
-#[inline]
-async fn get_blob_url(state: &AppState, did: &Did<'_>, cid: &Cid) -> Result<Url, IdentityError> {
-    let mut url = state.identity_resolver.pds_for_did(did).await?;
-    url.set_path("/xrpc/com.atproto.sync.getBlob");
-    url.query_pairs_mut()
-        .append_pair("did", did.as_str())
-        .append_pair("cid", &cid.to_string());
-    Ok(url)
-}
-
 pub async fn get_blob_handler(
     Path((raw_did, raw_cid)): Path<(String, String)>,
     State(state): State<Arc<AppState>>,
-) -> Result<axum::response::Response, (StatusCode, &'static str)> {
+) -> Result<axum::response::Response, (StatusCode, Json<ErrorResponse>)> {
+    /// Resolve the given DID to a PDS URL and then build the `/xrpc/com.atproto.sync.getBlob` url for the DID+CID.
+    #[inline]
+    async fn get_blob_url(
+        state: &AppState,
+        did: &Did<'_>,
+        cid: &Cid,
+    ) -> Result<Url, IdentityError> {
+        let mut url = state.identity_resolver.pds_for_did(did).await?;
+        url.set_path("/xrpc/com.atproto.sync.getBlob");
+        url.query_pairs_mut()
+            .append_pair("did", did.as_str())
+            .append_pair("cid", &cid.to_string());
+        Ok(url)
+    }
+
     let (did, cid) = (
         match Did::new_owned(raw_did.as_str()) {
             Ok(did) => did,
             Err(_) => {
                 return Err((
                     StatusCode::UNPROCESSABLE_ENTITY,
-                    "Invalid or unprocessable DID",
+                    Json(ErrorResponse {
+                        error: "MalformedDid",
+                        message: Some("Invalid or unprocessable DID"),
+                    }),
                 ));
             }
         },
@@ -90,7 +99,10 @@ pub async fn get_blob_handler(
             Err(_) => {
                 return Err((
                     StatusCode::UNPROCESSABLE_ENTITY,
-                    "Invalid or unprocessable CID",
+                    Json(ErrorResponse {
+                        error: "MalformedCid",
+                        message: Some("Invalid or unprocessable CID"),
+                    }),
                 ));
             }
         },
@@ -145,13 +157,22 @@ pub async fn get_blob_handler(
                 if !policy.can_serve {
                     return Err((
                         StatusCode::GONE,
-                        "Content is not available through this service",
+                        Json(ErrorResponse {
+                            error: "BlobUnavailable",
+                            message: Some("Blob is not available through this service"),
+                        }),
                     ));
                 }
             }
             Err(_) => {
                 if !state.policy_service_fail_open {
-                    return Err((StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"));
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: "InternalServerError",
+                            message: Some("Internal Server Error"),
+                        }),
+                    ));
                 }
             }
         }
@@ -300,28 +321,57 @@ pub async fn get_blob_handler(
         Ok(blob) => blob,
         Err(err) => {
             return Err(match *err {
-                BlobDownloadError::NotFound => (StatusCode::NOT_FOUND, "Blob not found"),
+                BlobDownloadError::NotFound => (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: "BlobNotFound",
+                        message: Some("Blob not found"),
+                    }),
+                ),
                 BlobDownloadError::TooLarge => (
                     StatusCode::PAYLOAD_TOO_LARGE,
-                    "Blob exceeds maximum allowed size",
+                    Json(ErrorResponse {
+                        error: "BlobTooLarge",
+                        message: Some("Blob exceeds maximum allowed size"),
+                    }),
                 ),
-                BlobDownloadError::ForbiddenMimeType => {
-                    (StatusCode::FORBIDDEN, "Content type is not allowed")
-                }
-                BlobDownloadError::CidMismatch => {
-                    (StatusCode::BAD_GATEWAY, "Blob content does not match CID")
-                }
-                BlobDownloadError::CidUnsupportedMultihash => {
-                    (StatusCode::NOT_IMPLEMENTED, "Unsupported CID multihash")
-                }
-                BlobDownloadError::DidPdsResolutionFailure => {
-                    (StatusCode::BAD_GATEWAY, "Failed to resolve PDS for DID")
-                }
+                BlobDownloadError::ForbiddenMimeType => (
+                    StatusCode::FORBIDDEN,
+                    Json(ErrorResponse {
+                        error: "BlobForbiddenType",
+                        message: Some("Content type is not allowed"),
+                    }),
+                ),
+                BlobDownloadError::CidMismatch => (
+                    StatusCode::BAD_GATEWAY,
+                    Json(ErrorResponse {
+                        error: "BlobCidMismatch",
+                        message: Some("Blob content does not match CID"),
+                    }),
+                ),
+                BlobDownloadError::CidUnsupportedMultihash => (
+                    StatusCode::NOT_IMPLEMENTED,
+                    Json(ErrorResponse {
+                        error: "CidUnsupported",
+                        message: Some("Unsupported CID multihash"),
+                    }),
+                ),
+                BlobDownloadError::DidPdsResolutionFailure => (
+                    StatusCode::BAD_GATEWAY,
+                    Json(ErrorResponse {
+                        error: "CannotResolvePds",
+                        message: Some("Failed to resolve PDS for DID"),
+                    }),
+                ),
                 BlobDownloadError::FetchFailure
                 | BlobDownloadError::ErrorStatusCode
-                | BlobDownloadError::StreamFailed => {
-                    (StatusCode::BAD_GATEWAY, "Failed to fetch blob from PDS")
-                }
+                | BlobDownloadError::StreamFailed => (
+                    StatusCode::BAD_GATEWAY,
+                    Json(ErrorResponse {
+                        error: "BlobFetchFailed",
+                        message: Some("Failed to fetch blob from PDS"),
+                    }),
+                ),
             });
         }
     };
@@ -375,13 +425,27 @@ pub async fn get_blob_handler(
         .await
     {
         return Err(match *err {
-            BlobOwnershipError::NotFound => (StatusCode::NOT_FOUND, "Blob not found"),
-            BlobOwnershipError::DidPdsResolutionFailure => {
-                (StatusCode::BAD_GATEWAY, "Failed to resolve PDS from DID")
-            }
-            BlobOwnershipError::ErrorStatusCode | BlobOwnershipError::FetchFailure => {
-                (StatusCode::BAD_GATEWAY, "Failed to fetch blob from PDS")
-            }
+            BlobOwnershipError::NotFound => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "BlobNotFound",
+                    message: Some("Blob not found"),
+                }),
+            ),
+            BlobOwnershipError::DidPdsResolutionFailure => (
+                StatusCode::BAD_GATEWAY,
+                Json(ErrorResponse {
+                    error: "CannotResolvePds",
+                    message: Some("Failed to resolve PDS for DID"),
+                }),
+            ),
+            BlobOwnershipError::ErrorStatusCode | BlobOwnershipError::FetchFailure => (
+                StatusCode::BAD_GATEWAY,
+                Json(ErrorResponse {
+                    error: "BlobFetchFailed",
+                    message: Some("Failed to fetch blob from PDS"),
+                }),
+            ),
         });
     }
 

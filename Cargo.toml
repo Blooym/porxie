@@ -57,3 +57,4 @@ sysinfo = { version = "0.38.3", default-features = false, features = [
 ] }
 thiserror = "2.0.18"
 bytes = "1.11.1"
+serde = { version = "1.0.228", features = ["derive"] }

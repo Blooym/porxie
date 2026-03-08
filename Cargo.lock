@@ -2458,6 +2458,7 @@ dependencies = [
  "moka",
  "multihash-codetable",
  "reqwest",
+ "serde",
  "sysinfo",
  "thiserror 2.0.18",
  "tokio",
