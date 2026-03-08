@@ -123,7 +123,7 @@ pub async fn get_blob_handler(
                     .push(did.as_str())
                     .push(raw_cid.as_str());
 
-                let mut request = state.internal_http_client.get(policy_service_url);
+                let mut request = state.policy_http_client.get(policy_service_url);
                 for (name, value) in &state.policy_service_headers {
                     request = request.header(name, value);
                 }

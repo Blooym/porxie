@@ -25,7 +25,7 @@ use jacquard_identity::{
     resolver::{PlcSource, ResolverOptions},
 };
 use reqwest::Url;
-use std::{net::SocketAddr, num::NonZeroU64, sync::Arc, time::Duration};
+use std::{net::SocketAddr, num::NonZeroU64, sync::Arc};
 use tokio::{net::TcpListener, signal};
 use tower_http::{
     catch_panic::CatchPanicLayer,
@@ -148,6 +148,16 @@ struct AppArgs {
     )]
     upstream_timeout: humantime::Duration,
 
+    /// Maximum duration before an attempted connection to an upstream is aborted.
+    ///
+    /// This value should be lower than --upstream-timeout to allow time for error handling.
+    #[arg(
+        long = "upstream-connect-timeout",
+        env = "PORXIE_UPSTREAM_CONNECT_TIMEOUT",
+        default_value = "10s"
+    )]
+    upstream_connect_timeout: humantime::Duration,
+
     #[command(flatten)]
     cache: CacheArgs,
 
@@ -171,6 +181,7 @@ struct CacheArgs {
     /// Be aware that setting this value too high can lead to the process or system running out of memory, so adjust accordingly.
     /// The minimum cache size is 8mb.
     #[arg(
+        id = "ca_cache_size",
         long = "cache-size",
         env = "PORXIE_CACHE_SIZE",
         default_value = "512mb",
@@ -195,8 +206,11 @@ struct CacheArgs {
     )]
     size: ByteSize,
 
-    /// How long fetched blobs are cached before expiring.
+    /// How long fetched blobs can be unused in the cache before expiring.
+    ///
+    /// The timer will reset each time the cached blob is accessed.
     #[arg(
+        id = "ca_blob_cache_ttl",
         long = "blob-cache-ttl",
         env = "PORXIE_BLOB_CACHE_TTL",
         default_value = "7days"
@@ -204,7 +218,10 @@ struct CacheArgs {
     content_ttl: humantime::Duration,
 
     /// How long blob ownership data is cached before being re-checked.
+    ///
+    /// The timer will not reset regardless of cache access.
     #[arg(
+        id = "ca_ownership_cache_ttl",
         long = "ownership-cache-ttl",
         env = "PORXIE_OWNERSHIP_CACHE_TTL",
         default_value = "1day"
@@ -212,7 +229,10 @@ struct CacheArgs {
     ownership_ttl: humantime::Duration,
 
     /// How long policy decisions are cached before being re-checked.
+    ///
+    /// The timer will not reset regardless of cache access.
     #[arg(
+        id = "ca_cache_ttl",
         long = "policy-cache-ttl",
         env = "PORXIE_POLICY_CACHE_TTL",
         default_value = "1h"
@@ -226,6 +246,7 @@ struct CacheArgs {
     ///
     /// Be aware that you may also need to clear intermediary caches manually if you want a policy change to apply quickly.
     #[arg(
+        id = "ca_cache_control_header_value",
         long = "cache-control-header",
         env = "PORXIE_CACHE_CONTROL_HEADER",
         default_value = "public, max-age=604800, must-revalidate, immutable"
@@ -241,7 +262,11 @@ struct PolicyServiceArgs {
     /// Requests are sent as HTTP GET <url>/<did>/<cid>.
     ///
     /// The service is expected to return HTTP 200 (OK) if permitted or HTTP 410 (GONE) if restricted.
-    #[arg(long = "policy-service-url", env = "PORXIE_POLICY_SERVICE_URL")]
+    #[arg(
+        id = "pa_svc_url",
+        long = "policy-service-url",
+        env = "PORXIE_POLICY_SERVICE_URL"
+    )]
     url: Option<Url>,
 
     /// Headers sent alongside all requests to the policy service.
@@ -255,10 +280,11 @@ struct PolicyServiceArgs {
     ///
     /// Example (env): 'PORXIE_POLICY_SERVICE_HEADERS="Authorization: Bearer token|X-Api-Key: your-key"'
     #[arg(
+        id = "pa_svc_headers",
         long = "policy-service-headers",
         env = "PORXIE_POLICY_SERVICE_HEADERS",
         value_delimiter = '|',
-        requires = "url",
+        requires = "pa_svc_url",
         value_parser = |v: &str| -> Result<(HeaderName, HeaderValue), String> {
             let (name, value) = v.split_once(':')
                 .ok_or_else(|| format!("invalid header {v:?}: expected 'Name: value'"))?;
@@ -277,17 +303,40 @@ struct PolicyServiceArgs {
     ///
     /// Warning: enabling this means restricted blobs may be served when the policy service is unreachable.
     #[arg(
+        id = "pa_svc_fail_open",
         long = "policy-service-fail-open",
         env = "PORXIE_POLICY_SERVICE_FAIL_OPEN",
-        requires = "url"
+        requires = "pa_svc_url"
     )]
     fail_open: bool,
+
+    /// Maximum duration before policy service requests are timed out.
+    ///
+    /// This value should be lower than --request-timeout to allow time for error handling.
+    #[arg(
+        id = "pa_svc_timeout",
+        long = "policy-service-timeout",
+        env = "PORXIE_POLICY_SERVICE_TIMEOUT",
+        default_value = "30s"
+    )]
+    timeout: humantime::Duration,
+
+    /// Maximum duration before an attempted connection to the policy service is aborted.
+    ///
+    /// This value should be lower than --policy-service-timeout to allow time for error handling.
+    #[arg(
+        id = "pa_svc_connect_timeout",
+        long = "policy-service-connect-timeout",
+        env = "PORXIE_POLICY_SERVICE_CONNECT_TIMEOUT",
+        default_value = "10s"
+    )]
+    connect_timeout: humantime::Duration,
 }
 
 struct AppState {
     // Core.
     identity_resolver: JacquardResolver,
-    internal_http_client: reqwest::Client,
+    policy_http_client: reqwest::Client,
     external_http_client: reqwest::Client,
     cache: Caches,
     // Authentication.
@@ -311,8 +360,11 @@ async fn main() -> Result<()> {
     let args = AppArgs::parse();
 
     // Setup state.
-    let external_http_client =
-        build_external_http_client(args.upstream_timeout.into(), args.upstream_proxy)?;
+    let external_http_client = build_external_http_client(
+        args.upstream_timeout.into(),
+        args.upstream_connect_timeout.into(),
+        args.upstream_proxy,
+    )?;
     let app_state = Arc::new(AppState {
         identity_resolver: JacquardResolver::new(
             external_http_client.clone(),
@@ -326,7 +378,10 @@ async fn main() -> Result<()> {
             },
         ),
         external_http_client,
-        internal_http_client: build_internal_http_client(Duration::from_secs(15))?,
+        policy_http_client: build_internal_http_client(
+            args.policy.timeout.into(),
+            args.policy.connect_timeout.into(),
+        )?,
         cache: build_caches(&CacheBuildOptions {
             memory_capacity: args.cache.size.as_u64(),
             blob_content_ttl: args.cache.content_ttl.into(),

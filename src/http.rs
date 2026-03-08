@@ -17,7 +17,10 @@ const USER_AGENT: &str = concat!(
 const MAX_REDIRECTS: usize = 5;
 
 #[inline]
-pub fn build_internal_http_client(timeout: Duration) -> Result<reqwest::Client, reqwest::Error> {
+pub fn build_internal_http_client(
+    timeout: Duration,
+    connect_timeout: Duration,
+) -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .user_agent(USER_AGENT)
         .https_only(false)
@@ -26,6 +29,7 @@ pub fn build_internal_http_client(timeout: Duration) -> Result<reqwest::Client, 
         .brotli(true)
         .zstd(true)
         .deflate(true)
+        .connect_timeout(connect_timeout)
         .timeout(timeout)
         .build()
 }
@@ -33,6 +37,7 @@ pub fn build_internal_http_client(timeout: Duration) -> Result<reqwest::Client, 
 #[inline]
 pub fn build_external_http_client(
     timeout: Duration,
+    connect_timeout: Duration,
     proxy_url: Option<Url>,
 ) -> Result<reqwest::Client, reqwest::Error> {
     let mut builder = reqwest::Client::builder()
@@ -43,6 +48,7 @@ pub fn build_external_http_client(
         .brotli(true)
         .zstd(true)
         .deflate(true)
+        .connect_timeout(connect_timeout)
         .timeout(timeout);
 
     if let Some(proxy) = proxy_url {

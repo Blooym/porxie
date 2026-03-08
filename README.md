@@ -218,6 +218,14 @@ Options:
           [env: PORXIE_UPSTREAM_TIMEOUT=]
           [default: 30s]
 
+      --upstream-connect-timeout <UPSTREAM_CONNECT_TIMEOUT>
+          Maximum duration before an attempted connection to an upstream is aborted.
+
+          This value should be lower than --upstream-timeout to allow time for error handling.
+
+          [env: PORXIE_UPSTREAM_CONNECT_TIMEOUT=]
+          [default: 10s]
+
   -h, --help
           Print help (see a summary with '-h')
 
@@ -225,7 +233,7 @@ Options:
           Print version
 
 Cache Options:
-      --cache-size <SIZE>
+      --cache-size <ca_cache_size>
           Total memory allocation for the internal cache.
 
           Blobs are cached using an LFU policy, the most frequently requested blobs will be kept the longest when the cache begins to exceed its maximum size.
@@ -239,25 +247,31 @@ Cache Options:
           [env: PORXIE_CACHE_SIZE=]
           [default: 512mb]
 
-      --blob-cache-ttl <CONTENT_TTL>
-          How long fetched blobs are cached before expiring
+      --blob-cache-ttl <ca_blob_cache_ttl>
+          How long fetched blobs can be unused in the cache before expiring.
+
+          The timer will reset each time the cached blob is accessed.
 
           [env: PORXIE_BLOB_CACHE_TTL=]
           [default: 7days]
 
-      --ownership-cache-ttl <OWNERSHIP_TTL>
-          How long blob ownership data is cached before being re-checked
+      --ownership-cache-ttl <ca_ownership_cache_ttl>
+          How long blob ownership data is cached before being re-checked.
+
+          The timer will not reset regardless of cache access.
 
           [env: PORXIE_OWNERSHIP_CACHE_TTL=]
           [default: 1day]
 
-      --policy-cache-ttl <POLICY_TTL>
-          How long policy decisions are cached before being re-checked
+      --policy-cache-ttl <ca_cache_ttl>
+          How long policy decisions are cached before being re-checked.
+
+          The timer will not reset regardless of cache access.
 
           [env: PORXIE_POLICY_CACHE_TTL=]
           [default: 1h]
 
-      --cache-control-header <CACHE_CONTROL_HEADER_VALUE>
+      --cache-control-header <ca_cache_control_header_value>
           The Cache-Control header value to send alongside responses.
 
           This header does not modify internal cache lifetimes, only how other clients are instructed to cache responses (such as CDNs and browsers). You should adjust this according to your own infrastructure needs.
@@ -268,7 +282,7 @@ Cache Options:
           [default: "public, max-age=604800, must-revalidate, immutable"]
 
 Policy Service Options:
-      --policy-service-url <URL>
+      --policy-service-url <pa_svc_url>
           Policy service URL that DID+CID pairs will be checked against.
 
           Requests are sent as HTTP GET <url>/<did>/<cid>.
@@ -277,7 +291,7 @@ Policy Service Options:
 
           [env: PORXIE_POLICY_SERVICE_URL=]
 
-      --policy-service-headers <HEADERS>
+      --policy-service-headers <pa_svc_headers>
           Headers sent alongside all requests to the policy service.
 
           Each header must be in the format "Name: value". When using the CLI, the flag can be used multiple times. When setting via environment variable, headers are pipe-separated (|).
@@ -296,4 +310,20 @@ Policy Service Options:
           Warning: enabling this means restricted blobs may be served when the policy service is unreachable.
 
           [env: PORXIE_POLICY_SERVICE_FAIL_OPEN=]
+
+      --policy-service-timeout <pa_svc_timeout>
+          Maximum duration before policy service requests are timed out.
+
+          This value should be lower than --request-timeout to allow time for error handling.
+
+          [env: PORXIE_POLICY_SERVICE_TIMEOUT=]
+          [default: 30s]
+
+      --policy-service-connect-timeout <pa_svc_connect_timeout>
+          Maximum duration before an attempted connection to the policy service is aborted.
+
+          This value should be lower than --policy-service-timeout to allow time for error handling.
+
+          [env: PORXIE_POLICY_SERVICE_CONNECT_TIMEOUT=]
+          [default: 10s]
 ```
