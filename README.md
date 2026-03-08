@@ -115,7 +115,7 @@ Bluesky's CDN serves images at URLs in the form of `https://cdn.bsky.app/img/{pr
 IMGPROXY_PRESETS: >-
   avatar=rs:fill:1000:1000:1:1/g:ce/ext:webp,
   avatar_thumbnail=rs:fill:128:128:1:1/g:ce/q:70/ext:webp,
-  feed_thumbnail=rs:fit:0:1000/q:70/ext:webp,
+  feed_thumbnail=rs:fit:1000:0/q:70/ext:webp,
   feed_fullsize=ext:webp,
   banner=rs:fill:3000:1000:1:1/g:ce/ext:webp
 IMGPROXY_ONLY_PRESETS: true
