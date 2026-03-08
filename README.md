@@ -103,6 +103,8 @@ services:
       IMGPROXY_ALLOWED_SOURCES: "http://porxie:6314/"
       IMGPROXY_MAX_SRC_FILE_SIZE: 25000000
       IMGPROXY_CACHE_CONTROL_PASSTHROUGH: true
+      IMGPROXY_RETURN_ATTACHMENT: true
+      IMGPROXY_STRIP_METADATA: true
 ```
 
 #### Replicating cdn.bsky.app
@@ -111,10 +113,11 @@ Bluesky's CDN serves images at URLs in the form of `https://cdn.bsky.app/img/{pr
 
 ```yaml
 IMGPROXY_PRESETS: >-
-  avatar=rs:fill:1000:1000:1:1/g:ce,
-  avatar_thumbnail=rs:fill:128:128:1:1/g:ce,
-  feed_thumbnail=rs:fit:0:1000,
-  feed_fullsize=rs:fit:0:0
+  avatar=rs:fill:1000:1000:1:1/g:ce/ext:webp,
+  avatar_thumbnail=rs:fill:128:128:1:1/g:ce/q:70/ext:webp,
+  feed_thumbnail=rs:fit:0:1000/q:70/ext:webp,
+  feed_fullsize=ext:webp,
+  banner=rs:fill:3000:1000:1:1/g:ce/ext:webp
 IMGPROXY_ONLY_PRESETS: true
 ```
 
