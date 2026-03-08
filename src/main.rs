@@ -302,7 +302,7 @@ struct AppState {
     policy_service_fail_open: bool,
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     dotenv().ok();
     tracing_subscriber::fmt()
@@ -350,9 +350,9 @@ async fn main() -> Result<()> {
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(trace::DefaultMakeSpan::new().level(Level::INFO))
-                .on_request(DefaultOnRequest::default().level(Level::INFO))
+                .on_request(DefaultOnRequest::default().level(Level::DEBUG))
                 .on_response(DefaultOnResponse::default().level(Level::INFO))
-                .on_failure(DefaultOnFailure::default()),
+                .on_failure(DefaultOnFailure::default().level(Level::ERROR)),
         )
         .layer(NormalizePathLayer::trim_trailing_slash())
         .layer(CatchPanicLayer::new())
@@ -362,12 +362,13 @@ async fn main() -> Result<()> {
         ))
         .layer(axum_middleware::from_fn(
             async |req: Request, next: Next| {
-                const SERVER_HV: HeaderValue = HeaderValue::from_static(env!("CARGO_PKG_NAME"));
-                const ROBOTS_HV: HeaderValue = HeaderValue::from_static("none");
                 let mut res = next.run(req).await;
                 let res_headers = res.headers_mut();
-                res_headers.insert(header::SERVER, SERVER_HV);
-                res_headers.insert("X-Robots-Tag", ROBOTS_HV);
+                res_headers.insert(
+                    header::SERVER,
+                    const { HeaderValue::from_static(env!("CARGO_PKG_NAME")) },
+                );
+                res_headers.insert("X-Robots-Tag", const { HeaderValue::from_static("none") });
                 res
             },
         ))
