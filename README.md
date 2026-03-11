@@ -164,7 +164,7 @@ Server Options:
       --server-address <SA_ADDRESS>
           Address to bind the server to.
 
-          Use the 'ip:' prefix for a TCP address (e.g. 'ip:127.0.0.1:6314'), or on Unix systems, the 'unix:' prefix for a Unix socket path (e.g. 'unix:/run/porxie.sock').
+          Use the 'ip:' prefix for an IP address (e.g. 'ip:127.0.0.1:6314'), or on Unix systems, the 'unix:' prefix for a Unix socket path (e.g. 'unix:/run/porxie.sock').
 
           [env: PORXIE_SERVER_ADDRESS=]
           [default: ip:127.0.0.1:6314]
@@ -211,8 +211,6 @@ Blob Options:
 
       --blob-http-timeout <BA_BLOB_FETCH_TIMEOUT>
           Maximum duration before blob fetch requests are timed out.
-
-          This value should be lower than --blob-processing-timeout.
 
           [env: PORXIE_BLOB_HTTP_TIMEOUT=]
           [default: 30s]

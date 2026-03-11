@@ -4,17 +4,6 @@ use reqwest::redirect::Policy;
 use std::{num::NonZeroU64, time::Duration};
 use thiserror::Error;
 
-const USER_AGENT: &str = concat!(
-    env!("CARGO_PKG_NAME"),
-    "/",
-    env!("CARGO_PKG_VERSION_MAJOR"),
-    ".",
-    env!("CARGO_PKG_VERSION_MINOR"),
-    " (",
-    env!("CARGO_PKG_REPOSITORY"),
-    ")"
-);
-
 #[inline]
 pub fn build_http_client(
     timeout: Duration,
@@ -22,7 +11,16 @@ pub fn build_http_client(
     https_only: bool,
 ) -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
-        .user_agent(USER_AGENT)
+        .user_agent(concat!(
+            env!("CARGO_PKG_NAME"),
+            "/",
+            env!("CARGO_PKG_VERSION_MAJOR"),
+            ".",
+            env!("CARGO_PKG_VERSION_MINOR"),
+            " (",
+            env!("CARGO_PKG_REPOSITORY"),
+            ")"
+        ))
         .https_only(https_only)
         .redirect(Policy::limited(3))
         .gzip(true)

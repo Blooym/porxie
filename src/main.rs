@@ -68,7 +68,7 @@ impl FromStr for AddressType {
     about,
     version,
     after_help = "* Use '--help' for additional information.",
-    after_long_help = concat!("* Refer to the project README found at ", env!("CARGO_PKG_REPOSITORY"), " for more guidance.")
+    after_long_help = concat!("* Refer to the project page at ", env!("CARGO_PKG_HOMEPAGE"), " for more guidance.")
 )]
 struct AppArgs {
     #[command(flatten)]
@@ -92,7 +92,7 @@ struct AppArgs {
 struct ServerArgs {
     /// Address to bind the server to.
     ///
-    /// Use the 'ip:' prefix for a TCP address (e.g. 'ip:127.0.0.1:6314'), or on Unix systems,
+    /// Use the 'ip:' prefix for an IP address (e.g. 'ip:127.0.0.1:6314'), or on Unix systems,
     /// the 'unix:' prefix for a Unix socket path (e.g. 'unix:/run/porxie.sock').
     #[arg(
         id = "SA_ADDRESS",
@@ -187,8 +187,6 @@ struct BlobArgs {
     processing_timeout: humantime::Duration,
 
     /// Maximum duration before blob fetch requests are timed out.
-    ///
-    /// This value should be lower than --blob-processing-timeout.
     #[arg(
         id = "BA_BLOB_FETCH_TIMEOUT",
         long = "blob-http-timeout",
