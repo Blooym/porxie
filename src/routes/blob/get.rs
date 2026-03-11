@@ -193,7 +193,7 @@ pub async fn get_blob_handler(
 
             let validated_bytes = {
                 let response = state
-                    .external_http_client
+                    .blob_fetch_http_client
                     .get(blob_url)
                     .send()
                     .await
@@ -394,7 +394,7 @@ pub async fn get_blob_handler(
             // actually apart of the XRPC specification and we cannot rely on it (for now).
             // Use a range request to avoid downloading the full body on servers that support it instead.
             match state
-                .external_http_client
+                .blob_fetch_http_client
                 .get(blob_url)
                 .header(
                     header::RANGE,

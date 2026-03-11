@@ -5,11 +5,13 @@ mod routes;
 
 use crate::{
     cache::{CacheBuildOptions, Caches, build_caches},
-    http::{build_external_http_client, build_internal_http_client},
+    http::build_http_client,
     routes::{delete_cache_handler, get_blob_handler, get_index_handler},
 };
 use ::mime::Mime;
-use anyhow::Result;
+#[cfg(not(unix))]
+use anyhow::bail;
+use anyhow::{Context, Result, bail};
 use axum::{
     Router,
     extract::Request,
@@ -25,8 +27,7 @@ use jacquard_identity::{
     resolver::{PlcSource, ResolverOptions},
 };
 use reqwest::Url;
-use std::{net::SocketAddr, num::NonZeroU64, sync::Arc};
-use tokio::{net::TcpListener, signal};
+use std::{net::SocketAddr, num::NonZeroU64, path::PathBuf, str::FromStr, sync::Arc};
 use tower_http::{
     catch_panic::CatchPanicLayer,
     normalize_path::NormalizePathLayer,
@@ -35,6 +36,31 @@ use tower_http::{
 };
 use tracing::{Level, info};
 use tracing_subscriber::EnvFilter;
+
+#[derive(Clone)]
+enum AddressType {
+    Ip(SocketAddr),
+    #[cfg(unix)]
+    Unix(PathBuf),
+}
+
+impl FromStr for AddressType {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        #[cfg(unix)]
+        if let Some(path) = s.strip_prefix("unix:") {
+            return Ok(AddressType::Unix(PathBuf::from(path)));
+        }
+        if let Some(ip) = s.strip_prefix("ip:") {
+            return Ok(ip.parse::<SocketAddr>().map(AddressType::Ip)?);
+        }
+
+        #[cfg(unix)]
+        bail!("unknown address binding type, expected 'ip:<addr>' or 'unix:<path>'".to_string(),);
+        #[cfg(not(unix))]
+        bail!("unknown address binding type, expected 'ip:<addr>'".to_string());
+    }
+}
 
 #[derive(Parser)]
 #[clap(
@@ -45,55 +71,77 @@ use tracing_subscriber::EnvFilter;
     after_long_help = concat!("* Refer to the project README found at ", env!("CARGO_PKG_REPOSITORY"), " for more guidance.")
 )]
 struct AppArgs {
-    /// Socket address (IPv4 or IPv6) to bind the server to.
-    #[arg(
-        long = "address",
-        env = "PORXIE_ADDRESS",
-        default_value = "127.0.0.1:6314"
-    )]
-    address: SocketAddr,
+    #[command(flatten)]
+    server: ServerArgs,
 
-    /// Timeout applied to incoming requests.
+    #[command(flatten)]
+    blob: BlobArgs,
+
+    #[command(flatten)]
+    identity: IdentityArgs,
+
+    #[command(flatten)]
+    cache: CacheArgs,
+
+    #[command(flatten)]
+    policy: PolicyServiceArgs,
+}
+
+#[derive(Args)]
+#[command(next_help_heading = "Server Options")]
+struct ServerArgs {
+    /// Address to bind the server to.
+    ///
+    /// Use the 'ip:' prefix for a TCP address (e.g. 'ip:127.0.0.1:6314'), or on Unix systems,
+    /// the 'unix:' prefix for a Unix socket path (e.g. 'unix:/run/porxie.sock').
     #[arg(
-        long = "request-timeout",
-        env = "PORXIE_REQUEST_TIMEOUT",
-        default_value = "2m"
+        id = "SA_ADDRESS",
+        long = "server-address",
+        env = "PORXIE_SERVER_ADDRESS",
+        default_value = "ip:127.0.0.1:6314"
     )]
-    timeout: humantime::Duration,
+    address: AddressType,
 
     /// Bearer token for authenticating admin requests.
     ///
     /// When unset, all authenticated endpoints will reject requests with HTTP 401.
-    #[arg(long = "auth-token", env = "PORXIE_AUTH_TOKEN")]
+    #[arg(
+        id = "SA_SERVER_AUTH_TOKEN",
+        long = "server-auth-token",
+        env = "PORXIE_SERVER_AUTH_TOKEN"
+    )]
     auth_token: Option<String>,
+}
 
-    /// List of mimetypes that can be served.
+#[derive(Args)]
+#[command(next_help_heading = "Blob Options")]
+struct BlobArgs {
+    /// Blob mimetypes that can be served.
     ///
-    /// Validation is done loosely via content inference, further validation can be done by using another
-    /// layer that strictly processes content above this proxy, such as an image transformation service.
-    ///
-    /// By default only image and video are allowed.
-    /// Unknown blobs fall back to `application/octet-stream`, which also has to be explicitly enabled.
+    /// Validation is done loosely via content inference. Further validation can be done by a layer
+    /// above this proxy, such as an image transformation service. When inference fails, the blob's
+    /// type falls back to `application/octet-stream`. When that type is allowed, blobs failing
+    /// inference can still be served.
     ///
     /// When using the CLI, the flag can be used multiple times. When setting via environment variable,
-    /// values are comma-separated (e.g. `PORXIE_ALLOWED_MIMETYPES="video/*,image/*"`).
+    /// values are comma-separated (e.g. `PORXIE_BLOB_ALLOWED_MIMETYPES="video/*,image/*"`).
     #[arg(
-        long = "allowed-mimetypes",
-        env = "PORXIE_ALLOWED_MIMETYPES",
-        default_values = ["video/*", "image/*"],
+        id = "BA_BLOB_ALLOWED_MIMETYPES",
+        long = "blob-allowed-mimetypes",
+        env = "PORXIE_BLOB_ALLOWED_MIMETYPES",
+        default_values = ["image/*"],
         value_delimiter = ','
     )]
     allowed_mimetypes: Vec<Mime>,
 
-    /// Maximum blob size that can be served.
+    /// Maximum blob size that can be fetched and served.
     ///
-    /// Blobs that exceed this limit will return an HTTP 413 error.
-    ///
-    /// Be aware that setting this value too high can lead to the process or system running out of memory, so adjust accordingly.
-    /// The minimum max blob size is 512kb.
+    /// Blobs that exceed this limit will return HTTP 413. Setting this too high can exhaust
+    /// process or system memory. The minimum value is 512kb.
     #[arg(
-        long = "max-blob-size",
-        env = "PORXIE_MAX_BLOB_SIZE",
+        id = "BA_BLOB_MAX_SIZE",
+        long = "blob-max-size",
+        env = "PORXIE_BLOB_MAX_SIZE",
         default_value = "50mb",
         value_parser = |v: &str| -> Result<ByteSize, String> {
             let size: ByteSize = v.parse().map_err(|e| format!("{e}"))?;
@@ -114,55 +162,86 @@ struct AppArgs {
             Ok(size)
         }
     )]
-    max_blob_size: ByteSize,
+    max_size: ByteSize,
 
-    /// URL of the PLC directory instance used for `did:plc` lookups.
+    /// The Cache-Control header value to send alongside blob responses.
     ///
-    /// Can typically be left as default unless using a custom or test directory.
+    /// This does not affect internal cache lifetimes, only how downstream clients such as CDNs
+    /// and browsers are instructed to cache responses. Intermediary caches may need to be cleared
+    /// manually for changes to take effect quickly.
     #[arg(
-        long = "plc-directory-url",
-        env = "PORXIE_PLC_DIRECTORY_URL",
-        default_value = "https://plc.directory"
+        id = "BA_BLOB_CACHE_HEADER",
+        long = "blob-cache-header",
+        env = "PORXIE_BLOB_CACHE_HEADER",
+        default_value = "public, max-age=604800, must-revalidate, immutable"
     )]
-    plc_directory_url: Url,
+    cache_header: HeaderValue,
 
-    /// HTTP(S) or SOCKS5(h) proxy for upstream requests. Supports embedded credentials (e.g. http://user:pass@host).
-    ///
-    /// When unset, the system's proxy configuration is used automatically.
-    #[arg(long = "upstream-proxy", env = "PORXIE_UPSTREAM_PROXY", value_parser = |v: &str| {
-        let url = Url::parse(v).map_err(|e| e.to_string())?;
-        if !matches!(url.scheme(), "http" | "https" |"socks5" | "socks5h") {
-            return Err("proxy URL must use http://, https://, socks5://, or socks5h://".to_string());
-        }
-        Ok(url)
-    })]
-    upstream_proxy: Option<Url>,
-
-    /// Maximum duration before upstream requests are timed out.
-    ///
-    /// This value should be lower than --request-timeout to allow time for error handling.
+    /// Maximum duration a blob can be processed by this server before aborting.
     #[arg(
-        long = "upstream-timeout",
-        env = "PORXIE_UPSTREAM_TIMEOUT",
+        id = "BA_BLOB_PROCESSING_TIMEOUT",
+        long = "blob-processing-timeout",
+        env = "PORXIE_BLOB_PROCESSING_TIMEOUT",
+        default_value = "1m"
+    )]
+    processing_timeout: humantime::Duration,
+
+    /// Maximum duration before blob fetch requests are timed out.
+    ///
+    /// This value should be lower than --blob-processing-timeout.
+    #[arg(
+        id = "BA_BLOB_FETCH_TIMEOUT",
+        long = "blob-http-timeout",
+        env = "PORXIE_BLOB_HTTP_TIMEOUT",
         default_value = "30s"
     )]
-    upstream_timeout: humantime::Duration,
+    http_timeout: humantime::Duration,
 
-    /// Maximum duration before an attempted connection to an upstream is aborted.
+    /// Maximum duration before an attempted connection to a blob upstream is aborted.
     ///
-    /// This value should be lower than --upstream-timeout to allow time for error handling.
+    /// This value should be lower than --blob-http-timeout.
     #[arg(
-        long = "upstream-connect-timeout",
-        env = "PORXIE_UPSTREAM_CONNECT_TIMEOUT",
+        id = "BA_BLOB_FETCH_CONNECT_TIMEOUT",
+        long = "blob-http-connect-timeout",
+        env = "PORXIE_BLOB_HTTP_CONNECT_TIMEOUT",
         default_value = "10s"
     )]
-    upstream_connect_timeout: humantime::Duration,
+    http_connect_timeout: humantime::Duration,
+}
 
-    #[command(flatten)]
-    cache: CacheArgs,
+#[derive(Args)]
+#[command(next_help_heading = "Identity Options")]
+struct IdentityArgs {
+    /// URL of the PLC instance used for `did:plc` lookups.
+    ///
+    /// Can typically be left as default unless using a custom or local development setup.
+    #[arg(
+        id = "IA_PLC_URL",
+        long = "identity-plc-url",
+        env = "PORXIE_IDENTITY_PLC_URL",
+        default_value = "https://plc.directory"
+    )]
+    plc_url: Url,
 
-    #[command(flatten)]
-    policy: PolicyServiceArgs,
+    /// Maximum duration before identity resolution requests are timed out.
+    #[arg(
+        id = "IA_IDENTITY_HTTP_TIMEOUT",
+        long = "identity-http-timeout",
+        env = "PORXIE_IDENTITY_HTTP_TIMEOUT",
+        default_value = "10s"
+    )]
+    http_timeout: humantime::Duration,
+
+    /// Maximum duration before a connection attempt to an identity upstream is aborted.
+    ///
+    /// This value should be lower than --identity-http-timeout.
+    #[arg(
+        id = "IA_IDENTITY_HTTP_CONNECT_TIMEOUT",
+        long = "identity-http-connect-timeout",
+        env = "PORXIE_IDENTITY_HTTP_CONNECT_TIMEOUT",
+        default_value = "8s"
+    )]
+    http_connect_timeout: humantime::Duration,
 }
 
 #[derive(Args)]
@@ -170,20 +249,17 @@ struct AppArgs {
 struct CacheArgs {
     /// Total memory allocation for the internal cache.
     ///
-    /// Blobs are cached using an LFU policy, the most frequently requested blobs will be kept the longest
-    /// when the cache begins to exceed its maximum size.
+    /// Blobs are cached using an LFU policy. The most frequently requested blobs are kept longest
+    /// when the cache approaches its limit.
     ///
-    /// You may wish to adjust this to fit your needs.
+    /// For production deployments, a CDN or caching layer in front of this server is recommended
+    /// for lower latency and better global availability.
     ///
-    /// It is recommended to use a CDN or caching layer in front of Porxie for production deployments for lower
-    /// latency, better global availability and better response caching.
-    ///
-    /// Be aware that setting this value too high can lead to the process or system running out of memory, so adjust accordingly.
-    /// The minimum cache size is 8mb.
+    /// Setting this too high can exhaust process or system memory. The minimum value is 8mb.
     #[arg(
-        id = "ca_cache_size",
-        long = "cache-size",
-        env = "PORXIE_CACHE_SIZE",
+        id = "CA_CACHE_ALLOCATION",
+        long = "cache-allocation",
+        env = "PORXIE_CACHE_ALLOCATION",
         default_value = "512mb",
         value_parser = |v: &str| -> Result<ByteSize, String> {
             let size: ByteSize = v.parse().map_err(|e| format!("{e}"))?;
@@ -206,52 +282,32 @@ struct CacheArgs {
     )]
     size: ByteSize,
 
-    /// How long fetched blobs can be unused in the cache before expiring.
-    ///
-    /// The timer will reset each time the cached blob is accessed.
+    /// How long blobs can be idle in the cache before expiring.
     #[arg(
-        id = "ca_blob_cache_ttl",
-        long = "blob-cache-ttl",
-        env = "PORXIE_BLOB_CACHE_TTL",
+        id = "CA_CACHE_BLOB_TTI",
+        long = "cache-blob-tti",
+        env = "PORXIE_CACHE_BLOB_TTI",
         default_value = "7days"
     )]
-    content_ttl: humantime::Duration,
+    blob_tti: humantime::Duration,
 
-    /// How long blob ownership data is cached before being re-checked.
-    ///
-    /// The timer will not reset regardless of cache access.
+    /// How long blob ownership can be cached before expiring.
     #[arg(
-        id = "ca_ownership_cache_ttl",
-        long = "ownership-cache-ttl",
-        env = "PORXIE_OWNERSHIP_CACHE_TTL",
+        id = "CA_CACHE_OWNERSHIP_TTL",
+        long = "cache-ownership-ttl",
+        env = "PORXIE_CACHE_OWNERSHIP_TTL",
         default_value = "1day"
     )]
     ownership_ttl: humantime::Duration,
 
-    /// How long policy decisions are cached before being re-checked.
-    ///
-    /// The timer will not reset regardless of cache access.
+    /// How long policy decisions can be cached before expiring.
     #[arg(
-        id = "ca_cache_ttl",
-        long = "policy-cache-ttl",
-        env = "PORXIE_POLICY_CACHE_TTL",
+        id = "CA_CACHE_POLICY_TTL",
+        long = "cache-policy-ttl",
+        env = "PORXIE_CACHE_POLICY_TTL",
         default_value = "1h"
     )]
     policy_ttl: humantime::Duration,
-
-    /// The Cache-Control header value to send alongside responses.
-    ///
-    /// This header does not modify internal cache lifetimes, only how other clients are instructed to cache responses
-    /// (such as CDNs and browsers). You should adjust this according to your own infrastructure needs.
-    ///
-    /// Be aware that you may also need to clear intermediary caches manually if you want a policy change to apply quickly.
-    #[arg(
-        id = "ca_cache_control_header_value",
-        long = "cache-control-header",
-        env = "PORXIE_CACHE_CONTROL_HEADER",
-        default_value = "public, max-age=604800, must-revalidate, immutable"
-    )]
-    cache_control_header_value: HeaderValue,
 }
 
 #[derive(Args)]
@@ -262,11 +318,7 @@ struct PolicyServiceArgs {
     /// Requests are sent as HTTP GET <url>/<did>/<cid>.
     ///
     /// The service is expected to return HTTP 200 (OK) if permitted or HTTP 410 (GONE) if restricted.
-    #[arg(
-        id = "pa_svc_url",
-        long = "policy-service-url",
-        env = "PORXIE_POLICY_SERVICE_URL"
-    )]
+    #[arg(id = "PA_POLICY_URL", long = "policy-url", env = "PORXIE_POLICY_URL")]
     url: Option<Url>,
 
     /// Headers sent alongside all requests to the policy service.
@@ -276,15 +328,15 @@ struct PolicyServiceArgs {
     ///
     /// As pipes are used as a delimiter, they cannot be contained in headers.
     ///
-    /// Example (cli): '--policy-service-headers "Authorization: Bearer token" --policy-service-headers "X-Api-Key: your-key"'
+    /// Example (cli): '--policy-request-headers "Authorization: Bearer token" --policy-request-headers "X-Api-Key: your-key"'
     ///
-    /// Example (env): 'PORXIE_POLICY_SERVICE_HEADERS="Authorization: Bearer token|X-Api-Key: your-key"'
+    /// Example (env): 'PORXIE_POLICY_REQUEST_HEADERS="Authorization: Bearer token|X-Api-Key: your-key"'
     #[arg(
-        id = "pa_svc_headers",
-        long = "policy-service-headers",
-        env = "PORXIE_POLICY_SERVICE_HEADERS",
+        id = "PA_POLICY_REQ_HEADERS",
+        long = "policy-request-headers",
+        env = "PORXIE_POLICY_REQUEST_HEADERS",
         value_delimiter = '|',
-        requires = "pa_svc_url",
+        requires = "PA_POLICY_URL",
         value_parser = |v: &str| -> Result<(HeaderName, HeaderValue), String> {
             let (name, value) = v.split_once(':')
                 .ok_or_else(|| format!("invalid header {v:?}: expected 'Name: value'"))?;
@@ -296,52 +348,50 @@ struct PolicyServiceArgs {
             Ok((name, value))
         }
     )]
-    headers: Vec<(HeaderName, HeaderValue)>,
+    request_headers: Vec<(HeaderName, HeaderValue)>,
 
     /// Allow requests to proceed if the policy service is unavailable or returns an
     /// unexpected status code.
     ///
     /// Warning: enabling this means restricted blobs may be served when the policy service is unreachable.
     #[arg(
-        id = "pa_svc_fail_open",
-        long = "policy-service-fail-open",
-        env = "PORXIE_POLICY_SERVICE_FAIL_OPEN",
-        requires = "pa_svc_url"
+        id = "PA_POLICY_FAIL_OPEN",
+        long = "policy-fail-open",
+        env = "PORXIE_POLICY_FAIL_OPEN",
+        requires = "PA_POLICY_URL"
     )]
     fail_open: bool,
 
     /// Maximum duration before policy service requests are timed out.
-    ///
-    /// This value should be lower than --request-timeout to allow time for error handling.
     #[arg(
-        id = "pa_svc_timeout",
-        long = "policy-service-timeout",
-        env = "PORXIE_POLICY_SERVICE_TIMEOUT",
+        id = "PA_POLICY_HTTP_TIMEOUT",
+        long = "policy-http-timeout",
+        env = "PORXIE_POLICY_HTTP_TIMEOUT",
         default_value = "30s"
     )]
-    timeout: humantime::Duration,
+    http_timeout: humantime::Duration,
 
     /// Maximum duration before an attempted connection to the policy service is aborted.
     ///
-    /// This value should be lower than --policy-service-timeout to allow time for error handling.
+    /// This value should be lower than --policy-http-timeout.
     #[arg(
-        id = "pa_svc_connect_timeout",
-        long = "policy-service-connect-timeout",
-        env = "PORXIE_POLICY_SERVICE_CONNECT_TIMEOUT",
+        id = "PA_POLICY_HTTP_CONNECT_TIMEOUT",
+        long = "policy-http-connect-timeout",
+        env = "PORXIE_POLICY_HTTP_CONNECT_TIMEOUT",
         default_value = "10s"
     )]
-    connect_timeout: humantime::Duration,
+    http_connect_timeout: humantime::Duration,
 }
 
 struct AppState {
     // Core.
     identity_resolver: JacquardResolver,
     policy_http_client: reqwest::Client,
-    external_http_client: reqwest::Client,
+    blob_fetch_http_client: reqwest::Client,
     cache: Caches,
     // Authentication.
     auth_token: Option<String>,
-    // Blobs handling.
+    // Blob handling.
     allowed_mimetypes: Vec<Mime>,
     max_blob_size: NonZeroU64,
     cache_control_header: HeaderValue,
@@ -360,47 +410,67 @@ async fn main() -> Result<()> {
     let args = AppArgs::parse();
 
     // Setup state.
-    let external_http_client = build_external_http_client(
-        args.upstream_timeout.into(),
-        args.upstream_connect_timeout.into(),
-        args.upstream_proxy,
-    )?;
     let app_state = Arc::new(AppState {
         identity_resolver: JacquardResolver::new(
-            external_http_client.clone(),
+            build_http_client(
+                args.identity.http_timeout.into(),
+                args.identity.http_connect_timeout.into(),
+                !cfg!(debug_assertions),
+            )
+            .context("failed to build identity http client")?,
             ResolverOptions {
                 plc_source: PlcSource::PlcDirectory {
-                    base: args.plc_directory_url,
+                    base: args.identity.plc_url,
                 },
                 public_fallback_for_handle: true,
                 validate_doc_id: true,
+                request_timeout: Some(args.identity.http_timeout.into()),
                 ..Default::default()
             },
         ),
-        external_http_client,
-        policy_http_client: build_internal_http_client(
-            args.policy.timeout.into(),
-            args.policy.connect_timeout.into(),
-        )?,
+        blob_fetch_http_client: build_http_client(
+            args.blob.http_timeout.into(),
+            args.blob.http_connect_timeout.into(),
+            !cfg!(debug_assertions),
+        )
+        .context("failed to build blob fetch http client")?,
+        policy_http_client: build_http_client(
+            args.policy.http_timeout.into(),
+            args.policy.http_connect_timeout.into(),
+            !cfg!(debug_assertions),
+        )
+        .context("failed to build policy http client")?,
         cache: build_caches(&CacheBuildOptions {
             memory_capacity: args.cache.size.as_u64(),
-            blob_content_ttl: args.cache.content_ttl.into(),
+            blob_content_ttl: args.cache.blob_tti.into(),
             blob_ownership_ttl: args.cache.ownership_ttl.into(),
             blob_policy_ttl: args.cache.policy_ttl.into(),
-        })?,
-        auth_token: args.auth_token,
-        allowed_mimetypes: args.allowed_mimetypes,
-        max_blob_size: args.max_blob_size.as_u64().try_into()?,
-        cache_control_header: args.cache.cache_control_header_value,
+        })
+        .context("failed to build caches")?,
+        auth_token: args.server.auth_token,
+        allowed_mimetypes: args.blob.allowed_mimetypes,
+        max_blob_size: args
+            .blob
+            .max_size
+            .as_u64()
+            .try_into()
+            .context("max blob size was not a non-zero value")?,
+        cache_control_header: args.blob.cache_header,
         policy_service_url: args.policy.url,
-        policy_service_headers: args.policy.headers,
+        policy_service_headers: args.policy.request_headers,
         policy_service_fail_open: args.policy.fail_open,
     });
 
     // Setup router.
     let router = Router::new()
         .route("/", get(get_index_handler))
-        .route("/{did}/{cid}", get(get_blob_handler))
+        .route(
+            "/{did}/{cid}",
+            get(get_blob_handler).layer(TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                args.blob.processing_timeout.into(),
+            )),
+        )
         .route("/cache/{id}", delete(delete_cache_handler))
         .layer(
             TraceLayer::new_for_http()
@@ -411,10 +481,6 @@ async fn main() -> Result<()> {
         )
         .layer(NormalizePathLayer::trim_trailing_slash())
         .layer(CatchPanicLayer::new())
-        .layer(TimeoutLayer::with_status_code(
-            StatusCode::REQUEST_TIMEOUT,
-            args.timeout.into(),
-        ))
         .layer(axum_middleware::from_fn(
             async |req: Request, next: Next| {
                 let mut res = next.run(req).await;
@@ -429,15 +495,29 @@ async fn main() -> Result<()> {
         ))
         .with_state(app_state);
 
-    // Start server.
-    let tcp_listener = TcpListener::bind(args.address).await?;
-    info!(
-        "Internal server started - listening on: http://{}",
-        args.address,
-    );
-    axum::serve(tcp_listener, router)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    // Start server listener on specified address.
+    match args.server.address {
+        AddressType::Ip(ip) => {
+            let listener = tokio::net::TcpListener::bind(ip)
+                .await
+                .context("failed to bind tcp listener")?;
+            info!("listening on http://{ip}");
+            axum::serve(listener, router)
+                .with_graceful_shutdown(shutdown_signal())
+                .await?;
+        }
+        #[cfg(unix)]
+        AddressType::Unix(path) => {
+            let _ = std::fs::remove_file(&path);
+            let listener =
+                tokio::net::UnixListener::bind(&path).context("failed to bind unix listener")?;
+            info!("listening on unix:{}", path.display());
+            axum::serve(listener, router)
+                .with_graceful_shutdown(shutdown_signal())
+                .await?;
+            let _ = std::fs::remove_file(&path);
+        }
+    }
 
     Ok(())
 }
@@ -445,14 +525,14 @@ async fn main() -> Result<()> {
 // https://github.com/tokio-rs/axum/blob/15917c6dbcb4a48707a20e9cfd021992a279a662/examples/graceful-shutdown/src/main.rs#L55
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c()
+        tokio::signal::ctrl_c()
             .await
             .expect("failed to install Ctrl+C handler");
     };
 
     #[cfg(unix)]
     let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
             .expect("failed to install signal handler")
             .recv()
             .await;

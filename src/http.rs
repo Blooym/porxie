@@ -1,6 +1,6 @@
 use bytes::{Bytes, BytesMut};
 use futures::StreamExt;
-use reqwest::{Proxy, Url, redirect::Policy};
+use reqwest::redirect::Policy;
 use std::{num::NonZeroU64, time::Duration};
 use thiserror::Error;
 
@@ -14,17 +14,17 @@ const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_REPOSITORY"),
     ")"
 );
-const MAX_REDIRECTS: usize = 5;
 
 #[inline]
-pub fn build_internal_http_client(
+pub fn build_http_client(
     timeout: Duration,
     connect_timeout: Duration,
+    https_only: bool,
 ) -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .user_agent(USER_AGENT)
-        .https_only(false)
-        .redirect(Policy::limited(MAX_REDIRECTS))
+        .https_only(https_only)
+        .redirect(Policy::limited(3))
         .gzip(true)
         .brotli(true)
         .zstd(true)
@@ -32,30 +32,6 @@ pub fn build_internal_http_client(
         .connect_timeout(connect_timeout)
         .timeout(timeout)
         .build()
-}
-
-#[inline]
-pub fn build_external_http_client(
-    timeout: Duration,
-    connect_timeout: Duration,
-    proxy_url: Option<Url>,
-) -> Result<reqwest::Client, reqwest::Error> {
-    let mut builder = reqwest::Client::builder()
-        .user_agent(USER_AGENT)
-        .https_only(!cfg!(debug_assertions))
-        .redirect(Policy::limited(MAX_REDIRECTS))
-        .gzip(true)
-        .brotli(true)
-        .zstd(true)
-        .deflate(true)
-        .connect_timeout(connect_timeout)
-        .timeout(timeout);
-
-    if let Some(proxy) = proxy_url {
-        builder = builder.proxy(Proxy::all(proxy)?);
-    };
-
-    builder.build()
 }
 
 #[derive(Debug, Error)]
