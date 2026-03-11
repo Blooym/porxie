@@ -34,8 +34,8 @@ COPY --from=setup /bin/false /bin/false
 USER porxie
 
 # Set configuration defaults for container builds.
-ENV PORXIE_ADDRESS=0.0.0.0:6314
+ENV PORXIE_ADDRESS=ip:0.0.0.0:6314
 ENV RUST_LOG=info
-EXPOSE 5621
+EXPOSE 6314
 
 ENTRYPOINT ["/usr/bin/porxie"]
