@@ -4,13 +4,15 @@ use mime::Mime;
 pub fn sniff_mime(buf: &[u8]) -> Mime {
     // WORKAROUND: infer does not correctly detect all SVG variants.
     // This case is handled manually until the upstream crate is modified.
-    if buf.starts_with(b"<svg")
-        || (buf.starts_with(b"<?xml")
+    const SVG_MARKER: &[u8; 4] = b"<svg";
+    const XML_MARKER: &[u8; 5] = b"<?xml";
+    if buf.starts_with(SVG_MARKER)
+        || (buf.starts_with(XML_MARKER)
             && buf
                 .get(..256)
                 .unwrap_or(buf)
                 .windows(4)
-                .any(|w| w == b"<svg"))
+                .any(|w| w == SVG_MARKER))
     {
         return mime::IMAGE_SVG;
     }
