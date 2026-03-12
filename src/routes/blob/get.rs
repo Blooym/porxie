@@ -3,7 +3,7 @@ use crate::routes::ErrorResponse;
 use crate::{
     AppState,
     cache::{CachedBlobData, CachedBlobPolicy},
-    mime::is_mime_allowed,
+    mime::{is_mime_allowed, sniff_mime},
 };
 use axum::Json;
 use axum::{
@@ -267,15 +267,9 @@ pub async fn get_blob_handler(
                 bytes
             };
 
-            // Infer MIME type from content bytes rather than headers; this is imperfect
+            // Infer MIME type from content bytes rather than headers; this is fallible
             // and falls back to application/octet-stream if the type is unrecognised.
-            let mime_type = match infer::get(&validated_bytes) {
-                Some(m) => m
-                    .mime_type()
-                    .parse()
-                    .expect("infer mimetype should always be valid"),
-                None => mime::APPLICATION_OCTET_STREAM,
-            };
+            let mime_type = sniff_mime(&validated_bytes);
             if !is_mime_allowed(&mime_type, &state.allowed_mimetypes) {
                 tracing::debug!("blob was inferred to be a disallowed mime type: {mime_type}");
                 return Err(BlobDownloadError::ForbiddenMimeType);

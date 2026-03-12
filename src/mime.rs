@@ -1,5 +1,29 @@
 use mime::Mime;
 
+/// Sniff the MIME type from the given bytes, returning `application/octet-stream` if unknown.
+pub fn sniff_mime(buf: &[u8]) -> Mime {
+    // WORKAROUND: infer does not correctly detect all SVG variants.
+    // This case is handled manually until the upstream crate is modified.
+    if buf.starts_with(b"<svg")
+        || (buf.starts_with(b"<?xml")
+            && buf
+                .get(..256)
+                .unwrap_or(buf)
+                .windows(4)
+                .any(|w| w == b"<svg"))
+    {
+        return mime::IMAGE_SVG;
+    }
+
+    match infer::get(buf) {
+        Some(m) => m
+            .mime_type()
+            .parse()
+            .expect("infer mimetype should always be valid"),
+        None => mime::APPLICATION_OCTET_STREAM,
+    }
+}
+
 pub fn is_mime_allowed(mime: &Mime, allowed: &[Mime]) -> bool {
     const STAR: &str = "*";
 
