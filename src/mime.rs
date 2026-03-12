@@ -6,12 +6,13 @@ pub fn sniff_mime(buf: &[u8]) -> Mime {
     // This case is handled manually until the upstream crate is modified.
     const SVG_MARKER: &[u8; 4] = b"<svg";
     const XML_MARKER: &[u8; 5] = b"<?xml";
+    const XML_SNIFFAHEAD: usize = 256; // How far after the XML marker to sniff ahead for the SVG marker.
     if buf.starts_with(SVG_MARKER)
         || (buf.starts_with(XML_MARKER)
             && buf
-                .get(..256)
+                .get(..XML_SNIFFAHEAD)
                 .unwrap_or(buf)
-                .windows(4)
+                .windows(SVG_MARKER.len())
                 .any(|w| w == SVG_MARKER))
     {
         return mime::IMAGE_SVG;
