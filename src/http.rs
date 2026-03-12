@@ -59,7 +59,9 @@ pub async fn bytes_stream_capped(
         response
             .content_length()
             .unwrap_or(64 * 1024)
-            .min(max_size.get()) as usize,
+            .min(max_size.get())
+            .try_into()
+            .unwrap_or(usize::MAX),
     );
     let mut stream = response.bytes_stream();
     while let Some(chunk) = stream.next().await {
