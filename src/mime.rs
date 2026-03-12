@@ -2,8 +2,9 @@ use mime::Mime;
 
 /// Sniff the MIME type from the given bytes, returning `application/octet-stream` if unknown.
 pub fn sniff_mime(buf: &[u8]) -> Mime {
-    // WORKAROUND: infer does not correctly detect all SVG variants.
-    // This case is handled manually until the upstream crate is modified.
+    // WORKAROUND: infer does not correctly detect SVG.
+    // I have created PR to fix this at https://github.com/bojand/infer/pull/119
+    // Until that is merged, this case will work around that limitation.
     const SVG_MARKER: &[u8; 4] = b"<svg";
     const XML_MARKER: &[u8; 5] = b"<?xml";
     const XML_SNIFFAHEAD: usize = 256; // How far after the XML marker to sniff ahead for the SVG marker.
