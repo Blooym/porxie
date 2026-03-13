@@ -37,9 +37,9 @@ pub enum BytesStreamCappedError {
     /// The response content length exceeded the size limit.
     #[error("content exceeded the maximum size")]
     TooLarge,
-    /// An internal client error occured whilst processing the request,
+    /// An internal client error occurred whilst processing the request,
     /// see [`reqwest::Error`].
-    #[error("an internal client error occured: {0}")]
+    #[error(transparent)]
     ClientError(#[from] reqwest::Error),
 }
 

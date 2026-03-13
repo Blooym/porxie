@@ -2,6 +2,7 @@ mod cache;
 mod http;
 mod mime;
 mod routes;
+mod types;
 
 use crate::{
     cache::{CacheBuildOptions, Caches, build_caches},
@@ -9,8 +10,6 @@ use crate::{
     routes::{delete_cache_handler, get_blob_handler, get_index_handler},
 };
 use ::mime::Mime;
-#[cfg(not(unix))]
-use anyhow::bail;
 use anyhow::{Context, Result, bail};
 use axum::{
     Router,
@@ -143,7 +142,7 @@ struct BlobArgs {
         long = "blob-max-size",
         env = "PORXIE_BLOB_MAX_SIZE",
         default_value = "50mb",
-        value_parser = |v: &str| -> Result<ByteSize, String> {
+        value_parser = |v: &str| -> Result<NonZeroU64, String> {
             let size: ByteSize = v.parse().map_err(|e| format!("{e}"))?;
             if size.as_u64() < 512_000 {
                 return Err("minimum allowed value is 512kb".to_string())
@@ -159,10 +158,10 @@ struct BlobArgs {
                 ));
             }
 
-            Ok(size)
+            Ok(size.as_u64().try_into().map_err(|e| format!("invalid value {v}: {e}"))?)
         }
     )]
-    max_size: ByteSize,
+    max_size: NonZeroU64,
 
     /// The Cache-Control header value to send alongside blob responses.
     ///
@@ -259,7 +258,7 @@ struct CacheArgs {
         long = "cache-allocation",
         env = "PORXIE_CACHE_ALLOCATION",
         default_value = "512mb",
-        value_parser = |v: &str| -> Result<ByteSize, String> {
+        value_parser = |v: &str| -> Result<NonZeroU64, String> {
             let size: ByteSize = v.parse().map_err(|e| format!("{e}"))?;
             if size.as_u64() < 8_000_000 {
                 return Err("minimum allowed value is 8mb".to_string())
@@ -275,10 +274,10 @@ struct CacheArgs {
                 ));
             }
 
-            Ok(size)
+            Ok(size.as_u64().try_into().map_err(|e| format!("invalid value {v}: {e}"))?)
         }
     )]
-    size: ByteSize,
+    size: NonZeroU64,
 
     /// How long blobs can be idle in the cache before expiring.
     #[arg(
@@ -306,6 +305,15 @@ struct CacheArgs {
         default_value = "1h"
     )]
     policy_ttl: humantime::Duration,
+
+    /// How long identity lookups (DID resolution, etc) can be cached before expiring.
+    #[arg(
+        id = "CA_CACHE_IDENTITY_TTL",
+        long = "cache-identity-ttl",
+        env = "PORXIE_CACHE_IDENTITY_TTL",
+        default_value = "1h"
+    )]
+    identity_ttl: humantime::Duration,
 }
 
 #[derive(Args)]
@@ -337,11 +345,11 @@ struct PolicyServiceArgs {
         requires = "PA_POLICY_URL",
         value_parser = |v: &str| -> Result<(HeaderName, HeaderValue), String> {
             let (name, value) = v.split_once(':')
-                .ok_or_else(|| format!("invalid header {v:?}: expected 'Name: value'"))?;
+                .ok_or_else(|| format!("invalid header {v}: expected 'Name: value'"))?;
             let name = HeaderName::try_from(name.trim())
-                .map_err(|e| format!("invalid header name in {v:?}: {e}"))?;
+                .map_err(|e| format!("invalid header name in {v}: {e}"))?;
             let mut value = HeaderValue::try_from(value.trim())
-                .map_err(|e| format!("invalid header value in {v:?}: {e}"))?;
+                .map_err(|e| format!("invalid header value in {v}: {e}"))?;
             value.set_sensitive(true);
             Ok((name, value))
         }
@@ -439,20 +447,16 @@ async fn main() -> Result<()> {
         )
         .context("failed to build policy http client")?,
         cache: build_caches(&CacheBuildOptions {
-            memory_capacity: args.cache.size.as_u64(),
+            memory_capacity: args.cache.size,
             blob_content_ttl: args.cache.blob_tti.into(),
             blob_ownership_ttl: args.cache.ownership_ttl.into(),
             blob_policy_ttl: args.cache.policy_ttl.into(),
+            identity_cache_ttl: args.cache.identity_ttl.into(),
         })
         .context("failed to build caches")?,
         auth_token: args.server.auth_token,
         allowed_mimetypes: args.blob.allowed_mimetypes,
-        max_blob_size: args
-            .blob
-            .max_size
-            .as_u64()
-            .try_into()
-            .context("max blob size was not a non-zero value")?,
+        max_blob_size: args.blob.max_size,
         cache_control_header: args.blob.cache_header,
         policy_service_url: args.policy.url,
         policy_service_headers: args.policy.request_headers,

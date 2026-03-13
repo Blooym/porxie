@@ -1,6 +1,7 @@
 use mime::Mime;
 
 /// Sniff the MIME type from the given bytes, returning `application/octet-stream` if unknown.
+#[must_use]
 pub fn sniff_mime(buf: &[u8]) -> Mime {
     // WORKAROUND: infer does not correctly detect SVG.
     // I have created PR to fix this at https://github.com/bojand/infer/pull/119
@@ -28,6 +29,7 @@ pub fn sniff_mime(buf: &[u8]) -> Mime {
     }
 }
 
+#[must_use]
 pub fn is_mime_allowed(mime: &Mime, allowed: &[Mime]) -> bool {
     const STAR: &str = "*";
 
@@ -64,52 +66,37 @@ mod tests {
     fn test_is_mime_allowed() {
         // Test PNG when nothing is allowed.
         assert_eq!(
-            super::is_mime_allowed(&Mime::from_str("image/png").unwrap(), &vec![]),
+            super::is_mime_allowed(&Mime::from_str("image/png").unwrap(), &[]),
             false
         );
 
         // Test PNG when PNG is allowed.
         assert_eq!(
-            super::is_mime_allowed(
-                &Mime::from_str("image/png").unwrap(),
-                &vec![mime::IMAGE_PNG],
-            ),
+            super::is_mime_allowed(&Mime::from_str("image/png").unwrap(), &[mime::IMAGE_PNG],),
             true
         );
 
         // Test PNG when only JPG is allowed.
         assert_eq!(
-            super::is_mime_allowed(
-                &Mime::from_str("image/png").unwrap(),
-                &vec![mime::IMAGE_JPEG],
-            ),
+            super::is_mime_allowed(&Mime::from_str("image/png").unwrap(), &[mime::IMAGE_JPEG],),
             false
         );
 
         // Test PNG when any image subtype is allowed.
         assert_eq!(
-            super::is_mime_allowed(
-                &Mime::from_str("image/png").unwrap(),
-                &vec![mime::IMAGE_STAR],
-            ),
+            super::is_mime_allowed(&Mime::from_str("image/png").unwrap(), &[mime::IMAGE_STAR],),
             true
         );
 
         // Test PNG when anything is allowed.
         assert_eq!(
-            super::is_mime_allowed(
-                &Mime::from_str("image/png").unwrap(),
-                &vec![mime::STAR_STAR],
-            ),
+            super::is_mime_allowed(&Mime::from_str("image/png").unwrap(), &[mime::STAR_STAR],),
             true
         );
 
         // Test HTML when any image subtype is enabled.
         assert_eq!(
-            super::is_mime_allowed(
-                &Mime::from_str("text/html").unwrap(),
-                &vec![mime::IMAGE_STAR],
-            ),
+            super::is_mime_allowed(&Mime::from_str("text/html").unwrap(), &[mime::IMAGE_STAR],),
             false
         );
 
@@ -117,7 +104,7 @@ mod tests {
         assert_eq!(
             super::is_mime_allowed(
                 &Mime::from_str("image/png").unwrap(),
-                &vec![mime::TEXT_STAR, mime::IMAGE_STAR],
+                &[mime::TEXT_STAR, mime::IMAGE_STAR],
             ),
             true
         );

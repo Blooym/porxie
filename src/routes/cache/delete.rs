@@ -1,4 +1,4 @@
-use crate::{AppState, routes::ErrorResponse};
+use crate::{AppState, routes::ErrorResponse, types::blob_cid::BlobCid};
 use axum::{
     Json,
     extract::{Path, State},
@@ -8,7 +8,6 @@ use axum_extra::{
     TypedHeader,
     headers::{Authorization, authorization::Bearer},
 };
-use cid::Cid;
 use jacquard_common::types::did::Did;
 use std::sync::Arc;
 
@@ -39,7 +38,24 @@ pub async fn delete_cache_handler(
             )
         })?;
 
-        // Clear all ownership and policy data for this DID.
+        // Clear all identity, ownership and policy data for this DID.
+        state
+            .cache
+            .identity
+            .invalidate_entries_if({
+                let did = did.clone();
+                move |k, _v| *k == did
+            })
+            .map_err(|err| {
+                tracing::error!("failed to schedule identity cache invalidation: {err:?}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "InternalServerError",
+                        message: Some("Failed to schedule cache invalidation"),
+                    }),
+                )
+            })?;
         state
             .cache
             .blob_policy
@@ -48,7 +64,7 @@ pub async fn delete_cache_handler(
                 move |k, _v| k.0 == did
             })
             .map_err(|err| {
-                tracing::error!("failed to invalid entries: {err:?}");
+                tracing::error!("failed to schedule blob policy cache invalidation: {err:?}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
@@ -62,7 +78,7 @@ pub async fn delete_cache_handler(
             .blob_ownership
             .invalidate_entries_if(move |k, _v| k.1 == did)
             .map_err(|err| {
-                tracing::error!("failed to invalid entries: {err:?}");
+                tracing::error!("failed to schedule blob ownership cache invalidation: {err:?}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
@@ -73,7 +89,7 @@ pub async fn delete_cache_handler(
             })?;
     } else {
         tracing::info!("invalidating CID cache entries");
-        let cid = Cid::try_from(identifier.as_str()).map_err(|_| {
+        let cid = BlobCid::try_from(identifier.as_str()).map_err(|_| {
             (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 Json(ErrorResponse {
@@ -90,7 +106,7 @@ pub async fn delete_cache_handler(
             .blob_ownership
             .invalidate_entries_if(move |k, _v| k.0 == cid)
             .map_err(|err| {
-                tracing::error!("failed to invalid entries: {err:?}");
+                tracing::error!("failed to schedule blob ownership cache invalidation: {err:?}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
@@ -104,7 +120,7 @@ pub async fn delete_cache_handler(
             .blob_policy
             .invalidate_entries_if(move |k, _v| k.1 == cid)
             .map_err(|err| {
-                tracing::error!("failed to invalid entries: {err:?}");
+                tracing::error!("failed to schedule blob policy cache invalidation: {err:?}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
