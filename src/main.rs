@@ -91,8 +91,8 @@ struct AppArgs {
 struct ServerArgs {
     /// Address to bind the server to.
     ///
-    /// Use the 'ip:' prefix for an IP address (e.g. 'ip:127.0.0.1:6314'), or on Unix systems,
-    /// the 'unix:' prefix for a Unix socket path (e.g. 'unix:/run/porxie.sock').
+    /// Use the 'ip:' prefix for an IP address (e.g. 'ip:127.0.0.1:6314'), or on UNIX systems,
+    /// the 'unix:' prefix for a UNIX socket path (e.g. 'unix:/run/porxie.sock').
     #[arg(
         id = "SA_ADDRESS",
         long = "server-address",

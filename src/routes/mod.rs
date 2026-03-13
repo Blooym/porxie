@@ -28,7 +28,7 @@ pub async fn get_index_handler() -> ([(HeaderName, HeaderValue); 1], &'static st
 |_|   \___/|_|  /_/\_\_|\___|
 
 
-A correct and efficient ATProto blob proxy service.
+A correct and efficient ATProto blob proxy for secure content delivery.
 
 Links:
  - Repo:    https://codeberg.org/Blooym/porxie
