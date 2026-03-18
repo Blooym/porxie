@@ -1,6 +1,12 @@
+<div align="center">
+
+<img src="./assets/logo.svg" alt="Porxie logo" width="64">
+
 # Porxie
 
 A correct and efficient ATProto blob proxy for secure content delivery.
+
+</div>
 
 ## Features
 
