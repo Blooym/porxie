@@ -53,7 +53,7 @@ docker run -d \
   --name porxie \
   --restart unless-stopped \
   -p 6314:6314 \
-  ghcr.io/blooym/porxie:latest
+  blooym/porxie:latest
 ```
 
 ### Run: Docker Compose
@@ -63,7 +63,7 @@ To run Porxie with Docker Compose, you can start with the following `compose.yml
 ```yaml
 services:
   porxie:
-    image: ghcr.io/blooym/porxie:latest
+    image: blooym/porxie:latest
     restart: unless-stopped
     read_only: true
     ports:
@@ -313,7 +313,7 @@ Using Docker Compose, an example `compose.yml` would look like this:
 ```yaml
 services:
   porxie:
-    image: ghcr.io/blooym/porxie:latest
+    image: blooym/porxie:latest
     restart: unless-stopped
     read_only: true
     cap_drop:
