@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./assets/logo.svg" alt="Porxie logo" width="64">
+<img src="./assets/logo.svg" alt="Porxie logo" height="64" width="64">
 
 # Porxie
 
