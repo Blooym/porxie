@@ -139,9 +139,10 @@ All options can be set via flags, environment variables, or a `.env` file. For t
 
 --blob-max-size <BA_BLOB_MAX_SIZE>
     Maximum blob size that can be fetched and served.
-
-    Blobs that exceed this limit will return HTTP 413. Setting this too high can exhaust
-    process or system memory. The minimum value is 512kb.
+          
+    Blobs that exceed this limit will return HTTP 413.
+          
+    The minimum value is 512kb and the maximum is the system's total memory.
 
     [env: PORXIE_BLOB_MAX_SIZE=]
     [default: 50mb]
@@ -208,14 +209,12 @@ All options can be set via flags, environment variables, or a `.env` file. For t
 ```
 --cache-allocation <CA_CACHE_ALLOCATION>
     Total memory allocation for the internal cache.
-
-    Blobs are cached using an LFU policy. The most frequently requested blobs are kept
-    longest when the cache approaches its limit.
-
-    For production deployments, a CDN or caching layer in front of this server is
-    recommended for lower latency and better global availability.
-
-    Setting this too high can exhaust process or system memory. The minimum value is 8mb.
+          
+    Blobs are cached using an LFU policy. The most frequently requested blobs are kept longest when the cache approaches its limit.
+          
+    For production deployments, a CDN or caching layer in front of this server is recommended for lower latency and better global availability.
+          
+    The minimum value is 8mb and the maximum is the system's total memory.
 
     [env: PORXIE_CACHE_ALLOCATION=]
     [default: 512mb]

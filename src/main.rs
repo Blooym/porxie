@@ -135,8 +135,9 @@ struct BlobArgs {
 
     /// Maximum blob size that can be fetched and served.
     ///
-    /// Blobs that exceed this limit will return HTTP 413. Setting this too high can exhaust
-    /// process or system memory. The minimum value is 512kb.
+    /// Blobs that exceed this limit will return HTTP 413.
+    ///
+    /// The minimum value is 512kb and the maximum is the system's total memory.
     #[arg(
         id = "BA_BLOB_MAX_SIZE",
         long = "blob-max-size",
@@ -252,7 +253,7 @@ struct CacheArgs {
     /// For production deployments, a CDN or caching layer in front of this server is recommended
     /// for lower latency and better global availability.
     ///
-    /// Setting this too high can exhaust process or system memory. The minimum value is 8mb.
+    /// The minimum value is 8mb and the maximum is the system's total memory.
     #[arg(
         id = "CA_CACHE_ALLOCATION",
         long = "cache-allocation",
