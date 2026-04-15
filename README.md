@@ -76,7 +76,7 @@ services:
 
 ### Run: Nix
 
-For Nix users, a [`flake.nix`](./flake.nix) is included in this repository that provides a package and a NixOS module. Please note that this is maintained on a best-effort basis for now and may be upstreamed by another contributor later.
+To run Porxie with Nix, you can use the [package](https://search.nixos.org/packages?channel=unstable&query=porxie) or [NixOS module](https://search.nixos.org/options?channel=unstable&query=porxie) provided directly in nixpkgs.
 
 ## Policy Service
 
