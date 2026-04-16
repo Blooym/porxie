@@ -18,10 +18,10 @@ pub struct CachedBlobData {
 }
 
 #[must_use]
-fn build_blob_content_cache(mem_capacity: u64, ttl: Duration) -> BlobContentCache {
+fn build_blob_content_cache(mem_capacity: u64, tti: Duration) -> BlobContentCache {
     tracing::debug!(
-        "building blob content cache with a mem_capacity of {mem_capacity} bytes and a ttl of {}s",
-        ttl.as_secs()
+        "building blob content cache with a mem_capacity of {mem_capacity} bytes and a tti of {}s",
+        tti.as_secs()
     );
 
     BlobContentCache::builder()
@@ -38,7 +38,7 @@ fn build_blob_content_cache(mem_capacity: u64, ttl: Duration) -> BlobContentCach
         })
         .eviction_policy(EvictionPolicy::tiny_lfu())
         .max_capacity(mem_capacity)
-        .time_to_idle(ttl)
+        .time_to_idle(tti)
         .build()
 }
 
