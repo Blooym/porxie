@@ -358,3 +358,7 @@ IMGPROXY_ONLY_PRESETS: true
 ```
 
 Refer to the [imgproxy documentation](https://docs.imgproxy.net) for details on creating and modifying presets.
+
+## Operational Notes
+
+- You will need to [manually configure a cache rule](https://developers.cloudflare.com/cache/how-to/cache-rules/) when using Cloudflare Proxying as otherwise they do not seem to cache the content (which is indicated by the `cf-cache-status` returning `DYNAMIC` instead of `HIT/MISS/REVALIDATED`). To do this, go to the 'Cache Rules' configuration and add a rule for the hostname you run Porxie on that sets "Cache Eligibility" to "Eligible for Cache". <details> <summary>Screenshot of a Cache Rule on the Cloudflare Dashboard</summary> ![The Cloudflare dashboard showing the creation of a 'Cache Rule' that matches when the Hostname equals "porxie.example.com" and sets the cache eligibility to "Eligible for Cache."](./assets/docs/screenshots/cloudflare-cache-rule.png)</details>
