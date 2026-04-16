@@ -12,6 +12,8 @@ edition = "2024"
 [profile.release]
 lto = true
 codegen-units = 1
+opt-level = 3
+strip = "debuginfo"
 
 [dependencies]
 anyhow = { version = "1.0.102", features = ["std"], default-features = false }
