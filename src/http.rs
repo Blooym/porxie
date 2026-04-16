@@ -1,5 +1,5 @@
 use bytes::{Bytes, BytesMut};
-use futures::StreamExt;
+use futures_util::StreamExt;
 use reqwest::redirect::Policy;
 use std::{num::NonZeroU64, time::Duration};
 use thiserror::Error;
