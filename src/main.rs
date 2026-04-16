@@ -411,7 +411,7 @@ struct AppState {
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     dotenv().ok();
-    tracing_subscriber::fmt()
+    json_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new("info")))
         .init();
     let args = AppArgs::parse();
