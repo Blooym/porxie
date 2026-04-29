@@ -1,30 +1,32 @@
+mod blob_service;
 mod cache;
 mod http;
+mod identity_service;
 mod mime;
+mod policy_client;
 mod routes;
 mod types;
 
 use crate::{
-    cache::{CacheBuildOptions, Caches, build_caches},
-    http::build_http_client,
-    routes::{delete_cache_handler, get_blob_handler, get_index_handler},
+    blob_service::{BlobService, BlobServiceOptions},
+    cache::compute_cache_sizes,
+    identity_service::{IdentityService, IdentityServiceOptions},
+    policy_client::{PolicyClient, PolicyClientOptions},
+    routes::{delete_cache_handler, get_blob_handler, get_health_handler, get_index_handler},
 };
 use ::mime::Mime;
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, bail};
 use axum::{
     Router,
     extract::Request,
     http::{HeaderName, HeaderValue, StatusCode, header},
     middleware::{self as axum_middleware, Next},
+    response::Response,
     routing::{delete, get},
 };
 use bytesize::ByteSize;
 use clap::{Args, Parser};
 use dotenvy::dotenv;
-use jacquard_identity::{
-    JacquardResolver,
-    resolver::{PlcSource, ResolverOptions},
-};
 use reqwest::Url;
 use std::{net::SocketAddr, num::NonZeroU64, path::PathBuf, str::FromStr, sync::Arc};
 use tower_http::{
@@ -33,19 +35,22 @@ use tower_http::{
     timeout::TimeoutLayer,
     trace::{self, DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer},
 };
-use tracing::{Level, info};
+use tracing::Level;
 use tracing_subscriber::EnvFilter;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 enum AddressType {
+    /// An IP socket address.
     Ip(SocketAddr),
+    /// A UNIX socket path.
     #[cfg(unix)]
     Unix(PathBuf),
 }
 
 impl FromStr for AddressType {
     type Err = anyhow::Error;
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         #[cfg(unix)]
         if let Some(path) = s.strip_prefix("unix:") {
             return Ok(AddressType::Unix(PathBuf::from(path)));
@@ -173,7 +178,7 @@ struct BlobArgs {
         id = "BA_BLOB_CACHE_HEADER",
         long = "blob-cache-header",
         env = "PORXIE_BLOB_CACHE_HEADER",
-        default_value = "public, max-age=604800, must-revalidate, immutable"
+        default_value = "public, max-age=604800, immutable"
     )]
     cache_header: HeaderValue,
 
@@ -391,25 +396,22 @@ struct PolicyServiceArgs {
 }
 
 struct AppState {
-    // Core.
-    identity_resolver: JacquardResolver,
-    policy_http_client: reqwest::Client,
-    blob_fetch_http_client: reqwest::Client,
-    cache: Caches,
     // Authentication.
     auth_token: Option<String>,
     // Blob handling.
     allowed_mimetypes: Vec<Mime>,
-    max_blob_size: NonZeroU64,
+    blob_service: BlobService,
     cache_control_header: HeaderValue,
-    // Policy service.
-    policy_service_url: Option<Url>,
-    policy_service_headers: Vec<(HeaderName, HeaderValue)>,
-    policy_service_fail_open: bool,
+    max_blob_size: NonZeroU64,
+    // Policy.
+    policy_client: Option<PolicyClient>,
+    policy_fail_open: bool,
+    // Identity.
+    identity_service: IdentityService,
 }
 
 #[tokio::main(flavor = "multi_thread")]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
     dotenv().ok();
     json_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new("info")))
@@ -417,56 +419,50 @@ async fn main() -> Result<()> {
     let args = AppArgs::parse();
 
     // Setup state.
+    let cache_sizes = compute_cache_sizes(args.cache.size)?;
     let app_state = Arc::new(AppState {
-        identity_resolver: JacquardResolver::new(
-            build_http_client(
-                args.identity.http_timeout.into(),
-                args.identity.http_connect_timeout.into(),
-                !cfg!(debug_assertions),
-            )
-            .context("failed to build identity http client")?,
-            ResolverOptions {
-                plc_source: PlcSource::PlcDirectory {
-                    base: args.identity.plc_url,
-                },
-                public_fallback_for_handle: true,
-                validate_doc_id: true,
-                request_timeout: Some(args.identity.http_timeout.into()),
-                ..Default::default()
-            },
-        ),
-        blob_fetch_http_client: build_http_client(
-            args.blob.http_timeout.into(),
-            args.blob.http_connect_timeout.into(),
-            !cfg!(debug_assertions),
-        )
-        .context("failed to build blob fetch http client")?,
-        policy_http_client: build_http_client(
-            args.policy.http_timeout.into(),
-            args.policy.http_connect_timeout.into(),
-            !cfg!(debug_assertions),
-        )
-        .context("failed to build policy http client")?,
-        cache: build_caches(&CacheBuildOptions {
-            memory_capacity: args.cache.size,
-            blob_content_ttl: args.cache.blob_tti.into(),
-            blob_ownership_ttl: args.cache.ownership_ttl.into(),
-            blob_policy_ttl: args.cache.policy_ttl.into(),
-            identity_cache_ttl: args.cache.identity_ttl.into(),
-        })
-        .context("failed to build caches")?,
+        identity_service: IdentityService::new(IdentityServiceOptions {
+            cache_memory_allocation: cache_sizes.identity,
+            cache_ttl: args.cache.identity_ttl.into(),
+            http_timeout: args.identity.http_timeout.into(),
+            http_connect_timeout: args.identity.http_connect_timeout.into(),
+            plc_directory_url: args.identity.plc_url,
+        })?,
+        policy_client: args
+            .policy
+            .url
+            .map(|url| {
+                PolicyClient::new(PolicyClientOptions {
+                    policy_service_url: url,
+                    policy_service_req_headers: args.policy.request_headers,
+                    cache_max_memory_allocation: cache_sizes.policy,
+                    cache_ttl: args.cache.policy_ttl.into(),
+                    http_timeout: args.policy.http_timeout.into(),
+                    http_connect_timeout: args.policy.http_connect_timeout.into(),
+                })
+            })
+            .transpose()?,
+        blob_service: BlobService::new(BlobServiceOptions {
+            http_timeout: args.blob.http_timeout.into(),
+            http_connect_timeout: args.blob.http_connect_timeout.into(),
+            data_cache_max_capacity: cache_sizes.blob,
+            data_cache_tti: args.cache.blob_tti.into(),
+            ownership_cache_max_capacity: cache_sizes.ownership,
+            ownership_cache_ttl: args.cache.ownership_ttl.into(),
+        })?,
+
         auth_token: args.server.auth_token,
         allowed_mimetypes: args.blob.allowed_mimetypes,
         max_blob_size: args.blob.max_size,
         cache_control_header: args.blob.cache_header,
-        policy_service_url: args.policy.url,
-        policy_service_headers: args.policy.request_headers,
-        policy_service_fail_open: args.policy.fail_open,
+
+        policy_fail_open: args.policy.fail_open,
     });
 
     // Setup router.
     let router = Router::new()
         .route("/", get(get_index_handler))
+        .route("/health", get(get_health_handler))
         .route(
             "/{did}/{cid}",
             get(get_blob_handler).layer(TimeoutLayer::with_status_code(
@@ -484,18 +480,7 @@ async fn main() -> Result<()> {
         )
         .layer(NormalizePathLayer::trim_trailing_slash())
         .layer(CatchPanicLayer::new())
-        .layer(axum_middleware::from_fn(
-            async |req: Request, next: Next| {
-                let mut res = next.run(req).await;
-                let res_headers = res.headers_mut();
-                res_headers.insert(
-                    header::SERVER,
-                    const { HeaderValue::from_static(env!("CARGO_PKG_NAME")) },
-                );
-                res_headers.insert("X-Robots-Tag", const { HeaderValue::from_static("none") });
-                res
-            },
-        ))
+        .layer(axum_middleware::from_fn(additional_headers_middleware))
         .with_state(app_state);
 
     // Start server listener on specified address.
@@ -504,7 +489,7 @@ async fn main() -> Result<()> {
             let listener = tokio::net::TcpListener::bind(ip)
                 .await
                 .context("failed to bind tcp listener")?;
-            info!("listening on http://{ip}");
+            tracing::info!("server listening on http://{ip}");
             axum::serve(listener, router)
                 .with_graceful_shutdown(shutdown_signal())
                 .await?;
@@ -514,7 +499,7 @@ async fn main() -> Result<()> {
             let _ = std::fs::remove_file(&path);
             let listener =
                 tokio::net::UnixListener::bind(&path).context("failed to bind unix listener")?;
-            info!("listening on unix:{}", path.display());
+            tracing::info!("server listening on unix:{}", path.display());
             axum::serve(listener, router)
                 .with_graceful_shutdown(shutdown_signal())
                 .await?;
@@ -523,6 +508,17 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn additional_headers_middleware(req: Request, next: Next) -> Response {
+    let mut res = next.run(req).await;
+    let res_headers = res.headers_mut();
+    res_headers.insert(
+        header::SERVER,
+        const { HeaderValue::from_static(env!("CARGO_PKG_NAME")) },
+    );
+    res_headers.insert("X-Robots-Tag", const { HeaderValue::from_static("none") });
+    res
 }
 
 // https://github.com/tokio-rs/axum/blob/15917c6dbcb4a48707a20e9cfd021992a279a662/examples/graceful-shutdown/src/main.rs#L55

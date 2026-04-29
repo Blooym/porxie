@@ -2429,6 +2429,7 @@ dependencies = [
  "multihash-codetable",
  "reqwest",
  "serde",
+ "subtle",
  "sysinfo",
  "thiserror 2.0.18",
  "tokio",

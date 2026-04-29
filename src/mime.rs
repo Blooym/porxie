@@ -1,34 +1,41 @@
 use mime::Mime;
 
-/// Sniff the MIME type from the given bytes, returning `application/octet-stream` if unknown.
+/// Sniff the MIME type from the given bytes.
+///
+/// Returns [`mime::APPLICATION_OCTET_STREAM`] when unknown.
 #[must_use]
 pub fn sniff_mime(buf: &[u8]) -> Mime {
-    // WORKAROUND: infer does not correctly detect SVG.
-    // I have created PR to fix this at https://github.com/bojand/infer/pull/119
-    // Until that is merged, this case will work around that limitation.
-    const SVG_MARKER: &[u8; 4] = b"<svg";
-    const XML_MARKER: &[u8; 5] = b"<?xml";
-    const XML_SNIFFAHEAD: usize = 256; // How far after the XML marker to sniff ahead for the SVG marker.
-    if buf.starts_with(SVG_MARKER)
-        || (buf.starts_with(XML_MARKER)
-            && buf
-                .get(..XML_SNIFFAHEAD)
-                .unwrap_or(buf)
-                .windows(SVG_MARKER.len())
-                .any(|w| w == SVG_MARKER))
-    {
-        return mime::IMAGE_SVG;
-    }
-
     match infer::get(buf) {
         Some(m) => m
             .mime_type()
             .parse()
             .expect("infer mimetype should always be valid"),
-        None => mime::APPLICATION_OCTET_STREAM,
+        None => {
+            // WORKAROUND: infer does not correctly detect SVG.
+            // I have created PR to fix this at https://github.com/bojand/infer/pull/119
+            // Until that is merged, this case will work around that limitation.
+            const SVG_MARKER: &[u8; 4] = b"<svg";
+            const XML_MARKER: &[u8; 5] = b"<?xml";
+            const XML_SNIFFAHEAD: usize = 256; // How far after the XML marker to sniff ahead for the SVG marker.
+            if buf.len() >= 4 && buf.starts_with(SVG_MARKER)
+                || (buf.starts_with(XML_MARKER)
+                    && buf
+                        .get(..XML_SNIFFAHEAD)
+                        .unwrap_or(buf)
+                        .windows(SVG_MARKER.len())
+                        .any(|w| w == SVG_MARKER))
+            {
+                tracing::debug!("used svg workaround instead of regular inference");
+                return mime::IMAGE_SVG;
+            }
+            tracing::debug!("infer was unable to determine mimetype, using fallback value");
+            mime::APPLICATION_OCTET_STREAM
+        }
     }
 }
 
+/// Whether the given [`Mime`] is apart of the allowed array by
+/// checking if it matches directly or by wildcard.
 #[must_use]
 pub fn is_mime_allowed(mime: &Mime, allowed: &[Mime]) -> bool {
     const STAR: &str = "*";
@@ -63,50 +70,56 @@ mod tests {
     use std::str::FromStr;
 
     #[test]
-    fn test_is_mime_allowed() {
-        // Test PNG when nothing is allowed.
-        assert_eq!(
-            super::is_mime_allowed(&Mime::from_str("image/png").unwrap(), &[]),
-            false
-        );
+    fn no_match() {
+        // PNG when nothing is allowed.
+        assert!(!super::is_mime_allowed(
+            &Mime::from_str("image/png").unwrap(),
+            &[]
+        ));
+    }
 
-        // Test PNG when PNG is allowed.
-        assert_eq!(
-            super::is_mime_allowed(&Mime::from_str("image/png").unwrap(), &[mime::IMAGE_PNG],),
-            true
-        );
+    #[test]
+    fn exact_match() {
+        // PNG when PNG is allowed.
+        assert!(super::is_mime_allowed(
+            &Mime::from_str("image/png").unwrap(),
+            &[mime::IMAGE_PNG],
+        ));
 
-        // Test PNG when only JPG is allowed.
-        assert_eq!(
-            super::is_mime_allowed(&Mime::from_str("image/png").unwrap(), &[mime::IMAGE_JPEG],),
-            false
-        );
+        // PNG when only JPG is allowed.
+        assert!(!super::is_mime_allowed(
+            &Mime::from_str("image/png").unwrap(),
+            &[mime::IMAGE_JPEG],
+        ));
+    }
 
-        // Test PNG when any image subtype is allowed.
-        assert_eq!(
-            super::is_mime_allowed(&Mime::from_str("image/png").unwrap(), &[mime::IMAGE_STAR],),
-            true
-        );
+    #[test]
+    fn full_wildcard() {
+        // PNG when anything is allowed.
+        assert!(super::is_mime_allowed(
+            &Mime::from_str("image/png").unwrap(),
+            &[mime::STAR_STAR],
+        ));
+    }
 
-        // Test PNG when anything is allowed.
-        assert_eq!(
-            super::is_mime_allowed(&Mime::from_str("image/png").unwrap(), &[mime::STAR_STAR],),
-            true
-        );
+    #[test]
+    fn subtype_wildcard() {
+        // PNG when any image subtype is allowed.
+        assert!(super::is_mime_allowed(
+            &Mime::from_str("image/png").unwrap(),
+            &[mime::IMAGE_STAR]
+        ));
+
+        // PNG when images and text are enabled.
+        assert!(super::is_mime_allowed(
+            &Mime::from_str("image/png").unwrap(),
+            &[mime::TEXT_STAR, mime::IMAGE_STAR],
+        ));
 
         // Test HTML when any image subtype is enabled.
-        assert_eq!(
-            super::is_mime_allowed(&Mime::from_str("text/html").unwrap(), &[mime::IMAGE_STAR],),
-            false
-        );
-
-        // Test PNG when images and text are enabled.
-        assert_eq!(
-            super::is_mime_allowed(
-                &Mime::from_str("image/png").unwrap(),
-                &[mime::TEXT_STAR, mime::IMAGE_STAR],
-            ),
-            true
-        );
+        assert!(!super::is_mime_allowed(
+            &Mime::from_str("text/html").unwrap(),
+            &[mime::IMAGE_STAR],
+        ));
     }
 }

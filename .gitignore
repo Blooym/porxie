@@ -1,4 +1,5 @@
 target/
 .direnv/
+lexicons/
 
 test_server.py

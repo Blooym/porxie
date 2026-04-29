@@ -24,6 +24,9 @@
               rustfmt
               clippy
             ];
+            env = {
+              RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
+            };
           };
         }
       );

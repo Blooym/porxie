@@ -1,25 +1,22 @@
 mod blob;
 mod cache;
+mod health;
 
 pub use blob::get_blob_handler;
 pub use cache::delete_cache_handler;
+pub use health::get_health_handler;
 
-use axum::http::{HeaderName, HeaderValue, header};
-use serde::Serialize;
+/// A header value for [`header::CACHE_CONTROL`] indicating the response cannot be cached at all.
+pub const CACHE_CONTROL_NOCACHE_VALUE: &str = "must-understand, no-store";
 
-#[derive(Serialize)]
+#[derive(serde::Serialize)]
 pub struct ErrorResponse {
     error: &'static str,
     message: Option<&'static str>,
 }
 
-pub async fn get_index_handler() -> ([(HeaderName, HeaderValue); 1], &'static str) {
-    (
-        [(
-            header::CACHE_CONTROL,
-            const { HeaderValue::from_static("public, max-age=31536000, immutable") },
-        )],
-        r#"
+pub async fn get_index_handler() -> &'static str {
+    r#"
  _____                _
 |  __ \              (_)
 | |__) |__  _ ____  ___  ___
@@ -36,7 +33,6 @@ Links:
 
 Routes:
  - HTTP GET /{did}/{cid} - Resolve and fetch a blob from its origin.
- - HTTP DELETE /cache/{cid or did} - Invalidate cache for either a CID (blob, policy, ownership) or for a DID (ownerships and policies). Requires configured bearer auth token.
-"#,
-    )
+ - HTTP DELETE /cache/{cid or did} - Invalidate cache for either a CID (blob, policy, ownership) or for a DID (ownerships and policies). Requires auth.
+"#
 }

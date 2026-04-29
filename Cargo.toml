@@ -54,14 +54,13 @@ json-subscriber = { version = "0.2.8", default-features = false, features = [
     "env-filter",
 ] }
 mime = { version = "0.3.17", default-features = false }
-tracing = { version = "0.1.44", features = ["std"], default-features = false }
 moka = { version = "0.12.14", features = [
     "future",
     "logging",
 ], default-features = false }
 multihash-codetable = { version = "0.2.1", features = [
     "sha2",
-    "blake3",
+    # "blake3", # if it ever gets added to the spec.
     "std",
 ], default-features = false }
 reqwest = { version = "0.12.28", default-features = false, features = [
@@ -79,6 +78,7 @@ serde = { version = "1.0.228", features = [
     "derive",
     "std",
 ], default-features = false }
+subtle = { version = "2.6", default-features = false, features = ["std"] }
 sysinfo = { version = "0.38.4", default-features = false, features = [
     "system",
 ] }
@@ -95,6 +95,10 @@ tower-http = { version = "0.6.8", features = [
     "trace",
     "timeout",
     "tracing",
+], default-features = false }
+tracing = { version = "0.1.44", features = [
+    "attributes",
+    "std",
 ], default-features = false }
 tracing-subscriber = { version = "0.3.22", features = [
     "ansi",

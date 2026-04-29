@@ -1,36 +1,18 @@
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use futures_util::StreamExt;
-use reqwest::redirect::Policy;
-use std::{num::NonZeroU64, time::Duration};
+use std::num::NonZeroU64;
 use thiserror::Error;
 
-#[inline]
-pub fn build_http_client(
-    timeout: Duration,
-    connect_timeout: Duration,
-    https_only: bool,
-) -> Result<reqwest::Client, reqwest::Error> {
-    reqwest::Client::builder()
-        .user_agent(concat!(
-            env!("CARGO_PKG_NAME"),
-            "/",
-            env!("CARGO_PKG_VERSION_MAJOR"),
-            ".",
-            env!("CARGO_PKG_VERSION_MINOR"),
-            " (",
-            env!("CARGO_PKG_REPOSITORY"),
-            ")"
-        ))
-        .https_only(https_only)
-        .redirect(Policy::limited(3))
-        .gzip(true)
-        .brotli(true)
-        .zstd(true)
-        .deflate(true)
-        .connect_timeout(connect_timeout)
-        .timeout(timeout)
-        .build()
-}
+pub const PORXIE_USER_AGENT: &str = concat!(
+    env!("CARGO_PKG_NAME"),
+    "/",
+    env!("CARGO_PKG_VERSION_MAJOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_MINOR"),
+    " (",
+    env!("CARGO_PKG_REPOSITORY"),
+    ")"
+);
 
 #[derive(Debug, Error)]
 pub enum BytesStreamCappedError {
@@ -43,34 +25,49 @@ pub enum BytesStreamCappedError {
     ClientError(#[from] reqwest::Error),
 }
 
-/// A wrapper around `Response::bytes_stream()` that acts like `Response::bytes()`
-/// but enforces a maximum size limit while streaming the response.
+/// Stream a response into [`Bytes`], aborting if the buffer exceeds `max_size`.
+///
+/// Pre-allocates a buffer based on response size heuristics when available, otherwise starts small
+/// and grows as data is streamed. If the buffer capacity differs from the buffer length after,
+/// the buffer may be shrunk to fit.
 pub async fn bytes_stream_capped(
     response: reqwest::Response,
     max_size: NonZeroU64,
 ) -> Result<Bytes, BytesStreamCappedError> {
-    if let Some(content_length) = response.content_length()
-        && content_length > max_size.get()
-    {
+    let max_size = max_size.get();
+
+    // Use body size hint, fallback to content-length header.
+    let inferred_size = response.content_length().or_else(|| {
+        response
+            .headers()
+            .get(reqwest::header::CONTENT_LENGTH)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<u64>().ok())
+    });
+
+    // Skip stream if the inferred size exceeds max size.
+    if inferred_size.is_some_and(|size| size > max_size) {
         return Err(BytesStreamCappedError::TooLarge);
     }
 
-    let mut buffer = BytesMut::with_capacity(
-        response
-            .content_length()
-            .unwrap_or(64 * 1024)
-            .min(max_size.get())
-            .try_into()
-            .unwrap_or(usize::MAX),
-    );
+    // Stream bytes in chunks and abort if we exceed max size.
     let mut stream = response.bytes_stream();
+    let mut buffer = Vec::with_capacity(
+        inferred_size
+            .unwrap_or(64 * 1024)
+            .min(max_size)
+            .try_into()
+            .expect("buffer allocation should not exceed usize"),
+    );
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(BytesStreamCappedError::ClientError)?;
-        if buffer.len() as u64 + chunk.len() as u64 > max_size.get() {
+        if buffer.len() as u64 + chunk.len() as u64 > max_size {
             return Err(BytesStreamCappedError::TooLarge);
         }
         buffer.extend_from_slice(&chunk);
     }
 
-    Ok(buffer.freeze())
+    Ok(Bytes::from(
+        buffer.into_boxed_slice(), // shrink capacity to fit
+    ))
 }
