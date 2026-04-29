@@ -38,6 +38,14 @@ use tower_http::{
 use tracing::Level;
 use tracing_subscriber::EnvFilter;
 
+// Jemalloc seems to perform better compared to most system allocators,
+// especially with multi-threading and long-lived variable-sized
+// allocations.
+//
+// It especially performs a lot better on MUSL (when last benchmarked).
+#[global_allocator]
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 #[derive(Debug, Clone)]
 enum AddressType {
     /// An IP socket address.
