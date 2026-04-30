@@ -45,7 +45,7 @@ impl IdentityService {
             resolver: JacquardResolver::new(
                 reqwest::Client::builder()
                     .user_agent(PORXIE_USER_AGENT)
-                    .https_only(cfg!(debug_assertions))
+                    .https_only(!cfg!(debug_assertions))
                     .redirect(reqwest::redirect::Policy::limited(2))
                     .gzip(true)
                     .brotli(true)
