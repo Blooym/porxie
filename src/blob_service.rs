@@ -245,6 +245,9 @@ impl BlobService {
 
                 // Infer MIME type from content bytes rather than headers; this is fallible
                 // and falls back to application/octet-stream if the type is unrecognised.
+                //
+                // TODO: Merge this with the download stream process to reject bad MIMEs
+                // early?
                 let mime_type = sniff_mime(&validated_bytes);
                 if !is_mime_allowed(&mime_type, allowed_mimetypes) {
                     tracing::debug!("blob was inferred to be a disallowed mime type: {mime_type}");
