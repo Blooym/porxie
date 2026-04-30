@@ -7,9 +7,10 @@
 
 #[allow(unused_imports)]
 use core::marker::PhantomData;
+use jacquard_common::CowStr;
 use jacquard_common::deps::bytes::Bytes;
 use jacquard_common::types::string::{Did, Cid};
-use jacquard_derive::IntoStatic;
+use jacquard_derive::{IntoStatic, open_union};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
@@ -28,13 +29,139 @@ pub struct GetBlobOutput {
     pub body: Bytes,
 }
 
+
+#[open_union]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    thiserror::Error,
+    miette::Diagnostic,
+    IntoStatic
+)]
+
+#[serde(tag = "error", content = "message")]
+#[serde(bound(deserialize = "'de: 'a"))]
+pub enum GetBlobError<'a> {
+    #[serde(rename = "MalformedDid")]
+    MalformedDid(Option<CowStr<'a>>),
+    #[serde(rename = "MalformedCid")]
+    MalformedCid(Option<CowStr<'a>>),
+    #[serde(rename = "PolicyForbidden")]
+    PolicyForbidden(Option<CowStr<'a>>),
+    #[serde(rename = "InternalServerError")]
+    InternalServerError(Option<CowStr<'a>>),
+    #[serde(rename = "BlobNotFound")]
+    BlobNotFound(Option<CowStr<'a>>),
+    #[serde(rename = "BlobTooLarge")]
+    BlobTooLarge(Option<CowStr<'a>>),
+    #[serde(rename = "BlobForbiddenType")]
+    BlobForbiddenType(Option<CowStr<'a>>),
+    #[serde(rename = "BlobCidMismatch")]
+    BlobCidMismatch(Option<CowStr<'a>>),
+    #[serde(rename = "CidUnsupported")]
+    CidUnsupported(Option<CowStr<'a>>),
+    #[serde(rename = "CannotResolve")]
+    CannotResolve(Option<CowStr<'a>>),
+    #[serde(rename = "BlobFetchFailed")]
+    BlobFetchFailed(Option<CowStr<'a>>),
+}
+
+impl core::fmt::Display for GetBlobError<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::MalformedDid(msg) => {
+                write!(f, "MalformedDid")?;
+                if let Some(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+                Ok(())
+            }
+            Self::MalformedCid(msg) => {
+                write!(f, "MalformedCid")?;
+                if let Some(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+                Ok(())
+            }
+            Self::PolicyForbidden(msg) => {
+                write!(f, "PolicyForbidden")?;
+                if let Some(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+                Ok(())
+            }
+            Self::InternalServerError(msg) => {
+                write!(f, "InternalServerError")?;
+                if let Some(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+                Ok(())
+            }
+            Self::BlobNotFound(msg) => {
+                write!(f, "BlobNotFound")?;
+                if let Some(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+                Ok(())
+            }
+            Self::BlobTooLarge(msg) => {
+                write!(f, "BlobTooLarge")?;
+                if let Some(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+                Ok(())
+            }
+            Self::BlobForbiddenType(msg) => {
+                write!(f, "BlobForbiddenType")?;
+                if let Some(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+                Ok(())
+            }
+            Self::BlobCidMismatch(msg) => {
+                write!(f, "BlobCidMismatch")?;
+                if let Some(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+                Ok(())
+            }
+            Self::CidUnsupported(msg) => {
+                write!(f, "CidUnsupported")?;
+                if let Some(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+                Ok(())
+            }
+            Self::CannotResolve(msg) => {
+                write!(f, "CannotResolve")?;
+                if let Some(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+                Ok(())
+            }
+            Self::BlobFetchFailed(msg) => {
+                write!(f, "BlobFetchFailed")?;
+                if let Some(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+                Ok(())
+            }
+            Self::Unknown(err) => write!(f, "Unknown error: {:?}", err),
+        }
+    }
+}
+
 /// Response type for dev.blooym.porxie.getBlob
 pub struct GetBlobResponse;
 impl jacquard_common::xrpc::XrpcResp for GetBlobResponse {
     const NSID: &'static str = "dev.blooym.porxie.getBlob";
     const ENCODING: &'static str = "*/*";
     type Output<'de> = GetBlobOutput;
-    type Err<'de> = jacquard_common::xrpc::GenericError<'de>;
+    type Err<'de> = GetBlobError<'de>;
     fn encode_output(
         output: &Self::Output<'_>,
     ) -> Result<Vec<u8>, jacquard_common::xrpc::EncodeError> {

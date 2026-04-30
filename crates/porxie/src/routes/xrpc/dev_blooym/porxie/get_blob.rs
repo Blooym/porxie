@@ -10,7 +10,7 @@ use std::sync::Arc;
 /// Compatibility layer that converts the xrpc call into a
 /// regular get blob request. May become the primary method
 /// in the future.
-pub async fn get_blob_handler_xrpc_compat(
+pub async fn xrpc_compat_get_blob_handler(
     state: State<Arc<AppState>>,
     ExtractXrpc(request): ExtractXrpc<GetBlobRequest>,
 ) -> impl IntoResponse {

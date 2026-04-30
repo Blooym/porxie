@@ -1,5 +1,6 @@
 use crate::{http::PORXIE_USER_AGENT, types::blob_cid::BlobCid};
 use jacquard_common::types::did::Did;
+use lexgen::dev_blooym::porxie::get_blob_policy::{GetBlobPolicyOutput, GetBlobPolicyOutputPolicy};
 use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
 use reqwest::{
     StatusCode, Url,
@@ -9,12 +10,6 @@ use std::{sync::Arc, time::Duration};
 use thiserror::Error;
 use tracing::instrument;
 
-#[derive(Debug, Clone)]
-pub struct PolicyDecision {
-    /// Whether the service allows this blob can be served.
-    pub can_serve: bool,
-}
-
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum CreatePolicyClientError {
@@ -23,12 +18,32 @@ pub enum CreatePolicyClientError {
     HttpClient(#[from] reqwest::Error),
 }
 
+#[derive(Debug, Clone)]
+pub enum PolicyDecision {
+    Allowed,
+    Forbidden,
+}
+
+impl PolicyDecision {
+    fn from_service_output(response: &GetBlobPolicyOutput) -> Self {
+        match response.policy {
+            GetBlobPolicyOutputPolicy::Allowed(_) => Self::Allowed,
+            GetBlobPolicyOutputPolicy::Forbidden(_) => Self::Forbidden,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum GetBlobPolicyError {
-    /// Policy service returned an unhandled status code (Not 200 OK or 410 GONE).
-    #[error("received an unhandled status code from the policy service: {0}")]
-    UnhandledStatusCode(StatusCode),
+    /// Policy service returned an unsuccessful status code.
+    #[error("received an unsuccessful status code from the policy service: {0}")]
+    StatusCode(StatusCode),
+
+    /// An internal deserialization error occured.
+    #[error(transparent)]
+    Deserialize(#[from] serde_json::Error),
+
     /// An internal http client error occurred, see [`reqwest::Error`].
     #[error(transparent)]
     HttpClient(#[from] reqwest::Error),
@@ -63,7 +78,7 @@ impl PolicyClient {
         tracing::debug!("creating policy service client with options: {options:?}");
         Ok(Self {
             cache: MokaCache::<(Did<'static>, BlobCid), PolicyDecision>::builder()
-                .name("blob-policy")
+                .name("policy")
                 .weigher(|key, _value| {
                     (key.0.len() + key.1.encoded_len())
                         .try_into()
@@ -91,11 +106,11 @@ impl PolicyClient {
         })
     }
 
-    /// Query the policy service for the policy decision of this blob.
+    /// Query the policy service for any policy decisions applied to this actor/blob.
     ///
     /// Concurrent requests for the same policy are coalesced.
     #[instrument(skip_all, fields(did = %did, cid = %cid))]
-    pub async fn get_policy_for_blob(
+    pub async fn get_policy(
         &self,
         did: &Did<'static>,
         cid: BlobCid,
@@ -104,33 +119,45 @@ impl PolicyClient {
             .try_get_with_by_ref(&(did.clone(), cid), async {
                 tracing::debug!("querying policy service for the status");
 
-                let mut policy_service_url = self.policy_service_url.clone();
-                policy_service_url
-                    .path_segments_mut()
-                    .expect("policy service URL should not be cannot-be-a-base")
-                    .push(did.as_str())
-                    .push(&cid.to_string());
+                // Build policy service URL.
+                let url = {
+                    let mut url = self.policy_service_url.clone();
+                    url.set_path("/xrpc/dev.blooym.porxie.getBlobPolicy");
+                    url.query_pairs_mut()
+                        .append_pair("did", did.as_str())
+                        .append_pair("cid", &cid.to_string());
+                    url
+                };
 
-                let mut request = self.http_client.get(policy_service_url);
+                // Build request.
+                let mut request = self.http_client.get(url);
+                // TODO: Swap this for xrpc admin authentication.
                 for (name, value) in &self.policy_service_req_headers {
                     request = request.header(name, value);
                 }
 
+                // Fetch & deserialize policy data.
                 match request.send().await {
-                    Ok(response) => match response.status() {
-                        StatusCode::OK => {
-                            tracing::debug!("policy service allowed blob serving");
-                            Ok(PolicyDecision { can_serve: true })
+                    Ok(response) => {
+                        let status = response.status();
+                        if !status.is_success() {
+                            tracing::error!(
+                                "policy service returned unsuccessful status: {status}",
+                            );
+                            return Err(GetBlobPolicyError::StatusCode(status));
                         }
-                        StatusCode::GONE => {
-                            tracing::debug!("policy service forbids blob serving");
-                            Ok(PolicyDecision { can_serve: false })
+                        match serde_json::from_slice::<GetBlobPolicyOutput>(
+                            &response.bytes().await?,
+                        ) {
+                            Ok(output) => Ok(PolicyDecision::from_service_output(&output)),
+                            Err(err) => {
+                                tracing::error!(
+                                    "failed to deserialize policy service response: {status}",
+                                );
+                                Err(GetBlobPolicyError::Deserialize(err))
+                            }
                         }
-                        status => {
-                            tracing::error!("policy service returned unexpected status: {status}");
-                            Err(GetBlobPolicyError::UnhandledStatusCode(status))
-                        }
-                    },
+                    }
                     Err(err) => {
                         tracing::error!("error occurred contacting the policy service: {err:?}");
                         Err(GetBlobPolicyError::HttpClient(err))
@@ -140,8 +167,8 @@ impl PolicyClient {
             .await
     }
 
-    /// Invalidate cached policy decisions with the given predicate.
-    pub fn invalidate_policies<
+    /// Invalidate cached policy entries if they match the predicate.
+    pub fn invalidate_cache_entries<
         F: Fn(&(Did<'static>, BlobCid), &PolicyDecision) -> bool + Send + Sync + 'static,
     >(
         &self,

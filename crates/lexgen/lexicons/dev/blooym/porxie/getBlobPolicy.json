@@ -4,6 +4,7 @@
   "defs": {
     "main": {
       "type": "query",
+      "description": "Returns the policy status of the given actor + blob combination.",
       "parameters": {
         "type": "params",
         "required": [
@@ -31,10 +32,10 @@
           "properties": {
             "policy": {
               "type": "union",
+              "closed": true,
               "refs": [
                 "#allowed",
-                "#restricted",
-                "#unlisted"
+                "#forbidden"
               ]
             }
           }
@@ -46,25 +47,10 @@
       "description": "Blob is allowed to be served.",
       "properties": {}
     },
-    "restricted": {
+    "forbidden": {
       "type": "object",
-      "description": "Blob is explicitly restricted. It may have been removed due to moderation reasons.",
-      "properties": {
-        "reason": {
-          "type": "string",
-          "description": "An optional reason provided for this policy being applied to provide context to the requesting service."
-        }
-      }
-    },
-    "unlisted": {
-      "type": "object",
-      "description": "Blob is not being served at operator discretion. It may not meet the requirements for the service.",
-      "properties": {
-        "reason": {
-          "type": "string",
-          "description": "An optional reason provided for this policy being applied to provide context to the requesting service."
-        }
-      }
+      "description": "Blob is not allowed to be served.",
+      "properties": {}
     }
   }
 }

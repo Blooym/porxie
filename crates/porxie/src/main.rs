@@ -19,9 +19,10 @@ use crate::{
         get_blob_handler, get_index_handler,
         xrpc::{
             dev_blooym::porxie::{
-                clear_actor_cache_handler, clear_blob_cache_handler, get_blob_handler_xrpc_compat,
+                cache::{xrpc_cache_purge_actor_handler, xrpc_cache_purge_blob_handler},
+                xrpc_compat_get_blob_handler,
             },
-            get_health_handler,
+            xrpc_fallback_handler, xrpc_get_health_handler,
         },
     },
 };
@@ -33,7 +34,7 @@ use axum::{
     http::{HeaderName, HeaderValue, StatusCode, header},
     middleware::{self as axum_middleware, Next},
     response::Response,
-    routing::{get, post},
+    routing::{any, get, post},
 };
 use bytesize::ByteSize;
 use clap::{Args, Parser};
@@ -493,22 +494,24 @@ async fn main() -> anyhow::Result<()> {
         .nest(
             "/xrpc",
             Router::new()
-                .route("/_health", get(get_health_handler))
+                .route("/_health", get(xrpc_get_health_handler))
                 .route(
                     "/dev.blooym.porxie.getBlob",
-                    get(get_blob_handler_xrpc_compat).layer(TimeoutLayer::with_status_code(
+                    get(xrpc_compat_get_blob_handler).layer(TimeoutLayer::with_status_code(
                         StatusCode::REQUEST_TIMEOUT,
                         args.blob.processing_timeout.into(),
                     )),
                 )
                 .route(
-                    "/dev.blooym.porxie.clearActorCache",
-                    post(clear_actor_cache_handler),
+                    "/dev.blooym.porxie.cache.purgeActor",
+                    post(xrpc_cache_purge_actor_handler),
                 )
                 .route(
-                    "/dev.blooym.porxie.clearBlobCache",
-                    post(clear_blob_cache_handler),
-                ),
+                    "/dev.blooym.porxie.cache.purgeBlob",
+                    post(xrpc_cache_purge_blob_handler),
+                )
+                // Ensure /xrpc/... routes don't fall through elsewhere.
+                .route("/{rest}", any(xrpc_fallback_handler)),
         )
         .layer(
             TraceLayer::new_for_http()

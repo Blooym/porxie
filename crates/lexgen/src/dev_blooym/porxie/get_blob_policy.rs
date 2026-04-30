@@ -10,12 +10,11 @@ use alloc::collections::BTreeMap;
 
 #[allow(unused_imports)]
 use core::marker::PhantomData;
-use jacquard_common::CowStr;
 
 #[allow(unused_imports)]
 use jacquard_common::deps::codegen::unicode_segmentation::UnicodeSegmentation;
 use jacquard_common::types::string::{Did, Cid};
-use jacquard_derive::{IntoStatic, lexicon, open_union};
+use jacquard_derive::{IntoStatic, lexicon};
 use jacquard_lexicon::lexicon::LexiconDoc;
 use jacquard_lexicon::schema::LexiconSchema;
 
@@ -29,6 +28,12 @@ use crate::dev_blooym::porxie::get_blob_policy;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Allowed<'a> {}
+/// Blob is not allowed to be served.
+
+#[lexicon]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Forbidden<'a> {}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
 #[serde(rename_all = "camelCase")]
@@ -49,40 +54,14 @@ pub struct GetBlobPolicyOutput<'a> {
 }
 
 
-#[open_union]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
-#[serde(tag = "$type", bound(deserialize = "'de: 'a"))]
+#[serde(tag = "$type")]
+#[serde(bound(deserialize = "'de: 'a"))]
 pub enum GetBlobPolicyOutputPolicy<'a> {
     #[serde(rename = "dev.blooym.porxie.getBlobPolicy#allowed")]
     Allowed(Box<get_blob_policy::Allowed<'a>>),
-    #[serde(rename = "dev.blooym.porxie.getBlobPolicy#restricted")]
-    Restricted(Box<get_blob_policy::Restricted<'a>>),
-    #[serde(rename = "dev.blooym.porxie.getBlobPolicy#unlisted")]
-    Unlisted(Box<get_blob_policy::Unlisted<'a>>),
-}
-
-/// Blob is explicitly restricted. It may have been removed due to moderation reasons.
-
-#[lexicon]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct Restricted<'a> {
-    ///An optional reason provided for this policy being applied to provide context to the requesting service.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(borrow)]
-    pub reason: Option<CowStr<'a>>,
-}
-
-/// Blob is not being served at operator discretion. It may not meet the requirements for the service.
-
-#[lexicon]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct Unlisted<'a> {
-    ///An optional reason provided for this policy being applied to provide context to the requesting service.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(borrow)]
-    pub reason: Option<CowStr<'a>>,
+    #[serde(rename = "dev.blooym.porxie.getBlobPolicy#forbidden")]
+    Forbidden(Box<get_blob_policy::Forbidden<'a>>),
 }
 
 impl<'a> LexiconSchema for Allowed<'a> {
@@ -93,7 +72,22 @@ impl<'a> LexiconSchema for Allowed<'a> {
         "allowed"
     }
     fn lexicon_doc() -> LexiconDoc<'static> {
-        lexicon_doc_dev_blooym_porxie_get_blob_policy()
+        lexicon_doc_dev_blooym_porxie_getBlobPolicy()
+    }
+    fn validate(&self) -> Result<(), ConstraintError> {
+        Ok(())
+    }
+}
+
+impl<'a> LexiconSchema for Forbidden<'a> {
+    fn nsid() -> &'static str {
+        "dev.blooym.porxie.getBlobPolicy"
+    }
+    fn def_name() -> &'static str {
+        "forbidden"
+    }
+    fn lexicon_doc() -> LexiconDoc<'static> {
+        lexicon_doc_dev_blooym_porxie_getBlobPolicy()
     }
     fn validate(&self) -> Result<(), ConstraintError> {
         Ok(())
@@ -124,37 +118,7 @@ impl jacquard_common::xrpc::XrpcEndpoint for GetBlobPolicyRequest {
     type Response = GetBlobPolicyResponse;
 }
 
-impl<'a> LexiconSchema for Restricted<'a> {
-    fn nsid() -> &'static str {
-        "dev.blooym.porxie.getBlobPolicy"
-    }
-    fn def_name() -> &'static str {
-        "restricted"
-    }
-    fn lexicon_doc() -> LexiconDoc<'static> {
-        lexicon_doc_dev_blooym_porxie_get_blob_policy()
-    }
-    fn validate(&self) -> Result<(), ConstraintError> {
-        Ok(())
-    }
-}
-
-impl<'a> LexiconSchema for Unlisted<'a> {
-    fn nsid() -> &'static str {
-        "dev.blooym.porxie.getBlobPolicy"
-    }
-    fn def_name() -> &'static str {
-        "unlisted"
-    }
-    fn lexicon_doc() -> LexiconDoc<'static> {
-        lexicon_doc_dev_blooym_porxie_get_blob_policy()
-    }
-    fn validate(&self) -> Result<(), ConstraintError> {
-        Ok(())
-    }
-}
-
-fn lexicon_doc_dev_blooym_porxie_get_blob_policy() -> LexiconDoc<'static> {
+fn lexicon_doc_dev_blooym_porxie_getBlobPolicy() -> LexiconDoc<'static> {
     #[allow(unused_imports)]
     use jacquard_common::{CowStr, deps::smol_str::SmolStr, types::blob::MimeType};
     use jacquard_lexicon::lexicon::*;
@@ -169,6 +133,20 @@ fn lexicon_doc_dev_blooym_porxie_get_blob_policy() -> LexiconDoc<'static> {
                 LexUserType::Object(LexObject {
                     description: Some(
                         CowStr::new_static("Blob is allowed to be served."),
+                    ),
+                    properties: {
+                        #[allow(unused_mut)]
+                        let mut map = BTreeMap::new();
+                        map
+                    },
+                    ..Default::default()
+                }),
+            );
+            map.insert(
+                SmolStr::new_static("forbidden"),
+                LexUserType::Object(LexObject {
+                    description: Some(
+                        CowStr::new_static("Blob is not allowed to be served."),
                     ),
                     properties: {
                         #[allow(unused_mut)]
@@ -211,60 +189,6 @@ fn lexicon_doc_dev_blooym_porxie_get_blob_policy() -> LexiconDoc<'static> {
                     ..Default::default()
                 }),
             );
-            map.insert(
-                SmolStr::new_static("restricted"),
-                LexUserType::Object(LexObject {
-                    description: Some(
-                        CowStr::new_static(
-                            "Blob is explicitly restricted. It may have been removed due to moderation reasons.",
-                        ),
-                    ),
-                    properties: {
-                        #[allow(unused_mut)]
-                        let mut map = BTreeMap::new();
-                        map.insert(
-                            SmolStr::new_static("reason"),
-                            LexObjectProperty::String(LexString {
-                                description: Some(
-                                    CowStr::new_static(
-                                        "An optional reason provided for this policy being applied to provide context to the requesting service.",
-                                    ),
-                                ),
-                                ..Default::default()
-                            }),
-                        );
-                        map
-                    },
-                    ..Default::default()
-                }),
-            );
-            map.insert(
-                SmolStr::new_static("unlisted"),
-                LexUserType::Object(LexObject {
-                    description: Some(
-                        CowStr::new_static(
-                            "Blob is not being served at operator discretion. It may not meet the requirements for the service.",
-                        ),
-                    ),
-                    properties: {
-                        #[allow(unused_mut)]
-                        let mut map = BTreeMap::new();
-                        map.insert(
-                            SmolStr::new_static("reason"),
-                            LexObjectProperty::String(LexString {
-                                description: Some(
-                                    CowStr::new_static(
-                                        "An optional reason provided for this policy being applied to provide context to the requesting service.",
-                                    ),
-                                ),
-                                ..Default::default()
-                            }),
-                        );
-                        map
-                    },
-                    ..Default::default()
-                }),
-            );
             map
         },
         ..Default::default()
@@ -281,37 +205,37 @@ pub mod get_blob_policy_state {
     }
     /// State trait tracking which required fields have been set
     pub trait State: sealed::Sealed {
-        type Cid;
         type Did;
+        type Cid;
     }
     /// Empty state - all required fields are unset
     pub struct Empty(());
     impl sealed::Sealed for Empty {}
     impl State for Empty {
-        type Cid = Unset;
         type Did = Unset;
-    }
-    ///State transition - sets the `cid` field to Set
-    pub struct SetCid<S: State = Empty>(PhantomData<fn() -> S>);
-    impl<S: State> sealed::Sealed for SetCid<S> {}
-    impl<S: State> State for SetCid<S> {
-        type Cid = Set<members::cid>;
-        type Did = S::Did;
+        type Cid = Unset;
     }
     ///State transition - sets the `did` field to Set
     pub struct SetDid<S: State = Empty>(PhantomData<fn() -> S>);
     impl<S: State> sealed::Sealed for SetDid<S> {}
     impl<S: State> State for SetDid<S> {
-        type Cid = S::Cid;
         type Did = Set<members::did>;
+        type Cid = S::Cid;
+    }
+    ///State transition - sets the `cid` field to Set
+    pub struct SetCid<S: State = Empty>(PhantomData<fn() -> S>);
+    impl<S: State> sealed::Sealed for SetCid<S> {}
+    impl<S: State> State for SetCid<S> {
+        type Did = S::Did;
+        type Cid = Set<members::cid>;
     }
     /// Marker types for field names
     #[allow(non_camel_case_types)]
     pub mod members {
-        ///Marker type for the `cid` field
-        pub struct cid(());
         ///Marker type for the `did` field
         pub struct did(());
+        ///Marker type for the `cid` field
+        pub struct cid(());
     }
 }
 
@@ -381,8 +305,8 @@ where
 impl<'a, S> GetBlobPolicyBuilder<'a, S>
 where
     S: get_blob_policy_state::State,
-    S::Cid: get_blob_policy_state::IsSet,
     S::Did: get_blob_policy_state::IsSet,
+    S::Cid: get_blob_policy_state::IsSet,
 {
     /// Build the final struct
     pub fn build(self) -> GetBlobPolicy<'a> {

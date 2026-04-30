@@ -24,7 +24,42 @@
       },
       "output": {
         "encoding": "*/*"
-      }
+      },
+      "errors": [
+        {
+          "name": "BlobCidMismatch"
+        },
+        {
+          "name": "BlobFetchFailed"
+        },
+        {
+          "name": "BlobForbiddenType"
+        },
+        {
+          "name": "BlobNotFound"
+        },
+        {
+          "name": "BlobTooLarge"
+        },
+        {
+          "name": "CannotResolve"
+        },
+        {
+          "name": "CidUnsupported"
+        },
+        {
+          "name": "InternalServerError"
+        },
+        {
+          "name": "MalformedCid"
+        },
+        {
+          "name": "MalformedDid"
+        },
+        {
+          "name": "PolicyForbidden"
+        }
+      ]
     }
   }
 }

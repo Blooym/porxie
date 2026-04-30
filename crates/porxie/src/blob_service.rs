@@ -261,10 +261,6 @@ impl BlobService {
             .await
     }
 
-    pub async fn invalidate_blob(&self, cid: &BlobCid) {
-        self.data_cache.invalidate(cid).await
-    }
-
     /// Fetch whether the user owns the given blob either from the cache if available or the upstream source.
     ///
     /// The internal cache will be automatically populated if the blob was previously fetched from the same user.
@@ -333,7 +329,13 @@ impl BlobService {
             .await
     }
 
-    pub fn invalidate_blob_ownership<
+    /// Invalid a specific blob cache entry.
+    pub async fn invalidate_blob_cache_entry(&self, cid: &BlobCid) {
+        self.data_cache.invalidate(cid).await
+    }
+
+    /// Invalidate blob ownership cache entries if they match the predicate.
+    pub fn invalidate_blob_ownership_cache_entries<
         F: Fn(&(BlobCid, Did<'static>), &()) -> bool + Send + Sync + 'static,
     >(
         &self,

@@ -3,6 +3,5 @@
 // This file was automatically generated from Lexicon schemas.
 // Any manual changes will be overwritten on the next regeneration.
 
-pub mod cache;
-pub mod get_blob;
-pub mod get_blob_policy;
+pub mod purge_actor;
+pub mod purge_blob;

@@ -70,8 +70,8 @@ To run Porxie with Nix, you can use the [package](https://search.nixos.org/packa
 
 - [GET] `/{did}/{cid}`: Fetch a blob either from cache or origin.
 - [GET] `/xrpc/dev.blooym.porxie.getBlob?did=<did>&cid=<cid>`: XRPC Compatibility alias for the fetch blob endpoint.
-- [POST] `/xrpc/dev.blooym.porxie.clearActorCache?did=<did>`: Clear all cached items relating to an actor DID.
-- [POST] `/xrpc/dev.blooym.porxie.clearBlobCache?cid=<cid>`: Clear all cache items relating to a blob CID.
+- [POST] `/xrpc/dev.blooym.porxie.cache.purgeActor?did=<did>`: Purge all cached items relating to an actor DID.
+- [POST] `/xrpc/dev.blooym.porxie.cache.purgeBlob?cid=<cid>`: Purge all cache items relating to a blob CID.
 
 
 ## Policy Service

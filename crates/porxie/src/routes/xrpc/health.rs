@@ -11,7 +11,7 @@ struct GetHealthResponse {
     version: &'static str,
 }
 
-pub async fn get_health_handler() -> impl IntoResponse {
+pub async fn xrpc_get_health_handler() -> impl IntoResponse {
     (
         StatusCode::OK,
         [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],

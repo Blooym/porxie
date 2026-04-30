@@ -1,7 +1,7 @@
 use crate::{
     AppState,
     extractors::AdminXrpcAuth,
-    routes::{CACHE_CONTROL_NOCACHE_VALUE, ErrorResponse},
+    routes::{CACHE_CONTROL_NOCACHE_VALUE, XrpcErrorResponse},
     types::blob_cid::BlobCid,
 };
 use axum::{
@@ -10,27 +10,27 @@ use axum::{
     http::{HeaderName, header},
 };
 use jacquard_axum::ExtractXrpc;
-use lexgen::dev_blooym::porxie::clear_blob_cache::ClearBlobCacheRequest;
+use lexgen::dev_blooym::porxie::cache::purge_blob::PurgeBlobRequest;
 use reqwest::StatusCode;
 use std::sync::Arc;
 
-pub async fn clear_blob_cache_handler(
+pub async fn xrpc_cache_purge_blob_handler(
     _auth: AdminXrpcAuth,
     State(state): State<Arc<AppState>>,
-    ExtractXrpc(request): ExtractXrpc<ClearBlobCacheRequest>,
+    ExtractXrpc(request): ExtractXrpc<PurgeBlobRequest>,
 ) -> Result<
     StatusCode,
     (
         StatusCode,
         [(HeaderName, &'static str); 1],
-        Json<ErrorResponse>,
+        Json<XrpcErrorResponse>,
     ),
 > {
     let cid = BlobCid::try_from(request.cid.as_str()).map_err(|_| {
         (
             StatusCode::UNPROCESSABLE_ENTITY,
             [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
-            Json(ErrorResponse {
+            Json(XrpcErrorResponse {
                 error: "MalformedCid",
                 message: Some("Invalid or unprocessable CID"),
             }),
@@ -38,12 +38,12 @@ pub async fn clear_blob_cache_handler(
     })?;
 
     if let Some(ref policy_client) = state.policy_client {
-        policy_client.invalidate_policies(move |k, _v| k.1 == cid)
+        policy_client.invalidate_cache_entries(move |k, _v| k.1 == cid)
     }
-    state.blob_service.invalidate_blob(&cid).await;
+    state.blob_service.invalidate_blob_cache_entry(&cid).await;
     state
         .blob_service
-        .invalidate_blob_ownership(move |k, _v| k.0 == cid);
+        .invalidate_blob_ownership_cache_entries(move |k, _v| k.0 == cid);
 
     Ok(StatusCode::OK)
 }

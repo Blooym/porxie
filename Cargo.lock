@@ -2803,6 +2803,7 @@ dependencies = [
  "multihash-codetable",
  "reqwest",
  "serde",
+ "serde_json",
  "subtle",
  "sysinfo",
  "thiserror 2.0.18",

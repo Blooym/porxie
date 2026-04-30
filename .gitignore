@@ -1,4 +1,5 @@
 target/
 .direnv/
+__pycache__/
 
 test_server.py

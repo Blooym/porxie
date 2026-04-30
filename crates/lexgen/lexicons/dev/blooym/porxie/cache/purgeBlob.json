@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "dev.blooym.porxie.clearBlobCache",
+  "id": "dev.blooym.porxie.cache.purgeBlob",
   "defs": {
     "main": {
       "type": "procedure",
@@ -26,7 +26,12 @@
           "type": "object",
           "properties": {}
         }
-      }
+      },
+      "errors": [
+        {
+          "name": "MalformedCid"
+        }
+      ]
     }
   }
 }
