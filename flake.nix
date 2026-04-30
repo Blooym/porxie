@@ -23,8 +23,10 @@
               cargo
               rustfmt
               clippy
+              rust-jemalloc-sys
             ];
             env = {
+              JEMALLOC_OVERRIDE = pkgs.rust-jemalloc-sys; # https://github.com/NixOS/nixpkgs/issues/370494
               RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
             };
           };
