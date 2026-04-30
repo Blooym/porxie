@@ -12,14 +12,17 @@ WORKDIR /build
 RUN apk add --no-cache --update build-base
 
 # Pre-cache dependencies
-COPY ["Cargo.toml", "Cargo.lock", "./"]
-RUN mkdir src \
-    && echo "// Placeholder" > src/lib.rs \
+COPY Cargo.toml Cargo.lock ./
+COPY crates/porxie/Cargo.toml crates/porxie/Cargo.toml
+COPY crates/lexgen/Cargo.toml crates/lexgen/Cargo.toml
+RUN mkdir -p crates/porxie/src crates/lexgen/src \
+    && echo "// Placeholder" > crates/porxie/src/lib.rs \
+    && echo "// Placeholder" > crates/lexgen/src/lib.rs \
     && cargo build --release \
-    && rm src/lib.rs
+    && rm crates/porxie/src/lib.rs crates/lexgen/src/lib.rs
 
 # Build
-COPY src ./src
+COPY crates ./crates
 RUN cargo build --release
 
 # -----------
