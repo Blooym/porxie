@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 mod blob_service;
 mod cache;
 mod http;
