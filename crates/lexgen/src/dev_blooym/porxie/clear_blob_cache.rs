@@ -18,7 +18,6 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
 #[serde(rename_all = "camelCase")]
 pub struct ClearBlobCache<'a> {
-    ///The CID of the blob.
     #[serde(borrow)]
     pub cid: Cid<'a>,
 }

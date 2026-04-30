@@ -4,6 +4,7 @@
   "defs": {
     "main": {
       "type": "procedure",
+      "description": "Clear all cache entries relating to the specified blob. Requires admin authentication.",
       "input": {
         "encoding": "application/json",
         "schema": {
@@ -14,8 +15,7 @@
           "properties": {
             "cid": {
               "type": "string",
-              "format": "cid",
-              "description": "The CID of the blob."
+              "format": "cid"
             }
           }
         }

@@ -93,7 +93,7 @@ impl<'a> LexiconSchema for Allowed<'a> {
         "allowed"
     }
     fn lexicon_doc() -> LexiconDoc<'static> {
-        lexicon_doc_dev_blooym_porxie_getBlobPolicy()
+        lexicon_doc_dev_blooym_porxie_get_blob_policy()
     }
     fn validate(&self) -> Result<(), ConstraintError> {
         Ok(())
@@ -132,7 +132,7 @@ impl<'a> LexiconSchema for Restricted<'a> {
         "restricted"
     }
     fn lexicon_doc() -> LexiconDoc<'static> {
-        lexicon_doc_dev_blooym_porxie_getBlobPolicy()
+        lexicon_doc_dev_blooym_porxie_get_blob_policy()
     }
     fn validate(&self) -> Result<(), ConstraintError> {
         Ok(())
@@ -147,14 +147,14 @@ impl<'a> LexiconSchema for Unlisted<'a> {
         "unlisted"
     }
     fn lexicon_doc() -> LexiconDoc<'static> {
-        lexicon_doc_dev_blooym_porxie_getBlobPolicy()
+        lexicon_doc_dev_blooym_porxie_get_blob_policy()
     }
     fn validate(&self) -> Result<(), ConstraintError> {
         Ok(())
     }
 }
 
-fn lexicon_doc_dev_blooym_porxie_getBlobPolicy() -> LexiconDoc<'static> {
+fn lexicon_doc_dev_blooym_porxie_get_blob_policy() -> LexiconDoc<'static> {
     #[allow(unused_imports)]
     use jacquard_common::{CowStr, deps::smol_str::SmolStr, types::blob::MimeType};
     use jacquard_lexicon::lexicon::*;
@@ -192,9 +192,6 @@ fn lexicon_doc_dev_blooym_porxie_getBlobPolicy() -> LexiconDoc<'static> {
                                 map.insert(
                                     SmolStr::new_static("cid"),
                                     LexXrpcParametersProperty::String(LexString {
-                                        description: Some(
-                                            CowStr::new_static("The CID of the blob."),
-                                        ),
                                         format: Some(LexStringFormat::Cid),
                                         ..Default::default()
                                     }),
@@ -202,9 +199,6 @@ fn lexicon_doc_dev_blooym_porxie_getBlobPolicy() -> LexiconDoc<'static> {
                                 map.insert(
                                     SmolStr::new_static("did"),
                                     LexXrpcParametersProperty::String(LexString {
-                                        description: Some(
-                                            CowStr::new_static("The DID of the account."),
-                                        ),
                                         format: Some(LexStringFormat::Did),
                                         ..Default::default()
                                     }),
@@ -287,37 +281,37 @@ pub mod get_blob_policy_state {
     }
     /// State trait tracking which required fields have been set
     pub trait State: sealed::Sealed {
-        type Did;
         type Cid;
+        type Did;
     }
     /// Empty state - all required fields are unset
     pub struct Empty(());
     impl sealed::Sealed for Empty {}
     impl State for Empty {
-        type Did = Unset;
         type Cid = Unset;
-    }
-    ///State transition - sets the `did` field to Set
-    pub struct SetDid<S: State = Empty>(PhantomData<fn() -> S>);
-    impl<S: State> sealed::Sealed for SetDid<S> {}
-    impl<S: State> State for SetDid<S> {
-        type Did = Set<members::did>;
-        type Cid = S::Cid;
+        type Did = Unset;
     }
     ///State transition - sets the `cid` field to Set
     pub struct SetCid<S: State = Empty>(PhantomData<fn() -> S>);
     impl<S: State> sealed::Sealed for SetCid<S> {}
     impl<S: State> State for SetCid<S> {
-        type Did = S::Did;
         type Cid = Set<members::cid>;
+        type Did = S::Did;
+    }
+    ///State transition - sets the `did` field to Set
+    pub struct SetDid<S: State = Empty>(PhantomData<fn() -> S>);
+    impl<S: State> sealed::Sealed for SetDid<S> {}
+    impl<S: State> State for SetDid<S> {
+        type Cid = S::Cid;
+        type Did = Set<members::did>;
     }
     /// Marker types for field names
     #[allow(non_camel_case_types)]
     pub mod members {
-        ///Marker type for the `did` field
-        pub struct did(());
         ///Marker type for the `cid` field
         pub struct cid(());
+        ///Marker type for the `did` field
+        pub struct did(());
     }
 }
 
@@ -387,8 +381,8 @@ where
 impl<'a, S> GetBlobPolicyBuilder<'a, S>
 where
     S: get_blob_policy_state::State,
-    S::Did: get_blob_policy_state::IsSet,
     S::Cid: get_blob_policy_state::IsSet,
+    S::Did: get_blob_policy_state::IsSet,
 {
     /// Build the final struct
     pub fn build(self) -> GetBlobPolicy<'a> {

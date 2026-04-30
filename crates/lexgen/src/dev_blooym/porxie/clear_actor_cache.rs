@@ -18,7 +18,6 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
 #[serde(rename_all = "camelCase")]
 pub struct ClearActorCache<'a> {
-    ///The DID of the account.
     #[serde(borrow)]
     pub did: Did<'a>,
 }

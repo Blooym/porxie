@@ -4,6 +4,7 @@
   "defs": {
     "main": {
       "type": "procedure",
+      "description": "Clear all cache entries relating to the specified actor. Requires admin authentication.",
       "input": {
         "encoding": "application/json",
         "schema": {
@@ -14,8 +15,7 @@
           "properties": {
             "did": {
               "type": "string",
-              "format": "did",
-              "description": "The DID of the account."
+              "format": "did"
             }
           }
         }
