@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "net.dollware.porxie.getBlob",
+  "id": "dev.blooym.porxie.getBlob",
   "defs": {
     "main": {
       "type": "query",

@@ -1,7 +1,7 @@
 use crate::{AppState, extractors::AdminXrpcAuth, routes::ErrorResponse};
 use axum::{Json, extract::State, http::HeaderName};
 use jacquard_axum::ExtractXrpc;
-use lexgen::net_dollware::porxie::clear_actor_cache::ClearActorCacheRequest;
+use lexgen::dev_blooym::porxie::clear_actor_cache::ClearActorCacheRequest;
 use reqwest::StatusCode;
 use std::sync::Arc;
 

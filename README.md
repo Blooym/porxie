@@ -69,9 +69,9 @@ To run Porxie with Nix, you can use the [package](https://search.nixos.org/packa
 ## Routes
 
 - [GET] `/{did}/{cid}`: Fetch a blob either from cache or origin.
-- [GET] `/xrpc/net.dollware.porxie.getBlob?did=<did>&cid=<cid>`: XRPC Compatibility alias for the fetch blob endpoint.
-- [POST] `/xrpc/net.dollware.porxie.clearActorCache?did=<did>`: Clear all cached items relating to an actor DID.
-- [POST] `/xrpc/net.dollware.porxie.clearBlobCache?cid=<cid>`: Clear all cache items relating to a blob CID.
+- [GET] `/xrpc/dev.blooym.porxie.getBlob?did=<did>&cid=<cid>`: XRPC Compatibility alias for the fetch blob endpoint.
+- [POST] `/xrpc/dev.blooym.porxie.clearActorCache?did=<did>`: Clear all cached items relating to an actor DID.
+- [POST] `/xrpc/dev.blooym.porxie.clearBlobCache?cid=<cid>`: Clear all cache items relating to a blob CID.
 
 
 ## Policy Service

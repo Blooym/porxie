@@ -10,7 +10,7 @@ use axum::{
     http::{HeaderName, header},
 };
 use jacquard_axum::ExtractXrpc;
-use lexgen::net_dollware::porxie::clear_blob_cache::ClearBlobCacheRequest;
+use lexgen::dev_blooym::porxie::clear_blob_cache::ClearBlobCacheRequest;
 use reqwest::StatusCode;
 use std::sync::Arc;
 

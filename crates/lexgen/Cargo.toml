@@ -4,8 +4,8 @@ version = "0.0.0"
 edition = "2024"
 
 [features]
-default = ["net_dollware"]
-net_dollware = []
+default = ["dev_blooym"]
+dev_blooym = []
 
 [dependencies]
 jacquard-common = { version = "0.11.0", default-features = false }

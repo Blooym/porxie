@@ -18,10 +18,10 @@ use crate::{
     routes::{
         get_blob_handler, get_index_handler,
         xrpc::{
-            get_health_handler,
-            net_dollware::porxie::{
+            dev_blooym::porxie::{
                 clear_actor_cache_handler, clear_blob_cache_handler, get_blob_handler_xrpc_compat,
             },
+            get_health_handler,
         },
     },
 };
@@ -495,18 +495,18 @@ async fn main() -> anyhow::Result<()> {
             Router::new()
                 .route("/_health", get(get_health_handler))
                 .route(
-                    "/net.dollware.porxie.getBlob",
+                    "/dev.blooym.porxie.getBlob",
                     get(get_blob_handler_xrpc_compat).layer(TimeoutLayer::with_status_code(
                         StatusCode::REQUEST_TIMEOUT,
                         args.blob.processing_timeout.into(),
                     )),
                 )
                 .route(
-                    "/net.dollware.porxie.clearActorCache",
+                    "/dev.blooym.porxie.clearActorCache",
                     post(clear_actor_cache_handler),
                 )
                 .route(
-                    "/net.dollware.porxie.clearBlobCache",
+                    "/dev.blooym.porxie.clearBlobCache",
                     post(clear_blob_cache_handler),
                 ),
         )

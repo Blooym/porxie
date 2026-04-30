@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "net.dollware.porxie.clearBlobCache",
+  "id": "dev.blooym.porxie.clearActorCache",
   "defs": {
     "main": {
       "type": "procedure",
@@ -9,13 +9,13 @@
         "schema": {
           "type": "object",
           "required": [
-            "cid"
+            "did"
           ],
           "properties": {
-            "cid": {
+            "did": {
               "type": "string",
-              "format": "cid",
-              "description": "The CID of the blob."
+              "format": "did",
+              "description": "The DID of the account."
             }
           }
         }

@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "net.dollware.porxie.getBlobPolicy",
+  "id": "dev.blooym.porxie.getBlobPolicy",
   "defs": {
     "main": {
       "type": "query",
