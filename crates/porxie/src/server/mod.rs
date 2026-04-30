@@ -1,14 +1,15 @@
-pub mod address;
 mod extractors;
 mod middlewares;
 mod routes;
+mod socket_address;
+
+pub use socket_address::SocketAddress;
 
 use crate::{
     blob_service::BlobService,
     identity_service::IdentityService,
     policy_client::PolicyClient,
     server::{
-        address::Address,
         middlewares::server_headers_middleware,
         routes::{
             get_index_handler,
@@ -129,11 +130,11 @@ impl PorxieServer {
     /// Start server listener on specified address.
     pub async fn start<F: Future<Output = ()> + Send + 'static>(
         self,
-        address: Address,
+        address: SocketAddress,
         shutdown_signal: F,
     ) -> anyhow::Result<()> {
         match address {
-            Address::Ip(ip) => {
+            SocketAddress::Ip(ip) => {
                 let listener = tokio::net::TcpListener::bind(ip)
                     .await
                     .context("failed to bind tcp listener")?;
@@ -144,7 +145,7 @@ impl PorxieServer {
                 Ok(())
             }
             #[cfg(unix)]
-            Address::Unix(path) => {
+            SocketAddress::Unix(path) => {
                 use anyhow::Context;
 
                 let _ = std::fs::remove_file(&path);

@@ -14,7 +14,7 @@ use crate::{
     cache::compute_cache_sizes,
     identity_service::{IdentityService, IdentityServiceOptions},
     policy_client::{PolicyClient, PolicyClientOptions},
-    server::{PorxieServer, PorxieServerOptions, address::Address},
+    server::{PorxieServer, PorxieServerOptions, SocketAddress},
 };
 use ::mime::Mime;
 use axum::http::{HeaderName, HeaderValue};
@@ -71,7 +71,7 @@ struct ServerArgs {
         env = "PORXIE_SERVER_ADDRESS",
         default_value = "ip:127.0.0.1:6314"
     )]
-    address: Address,
+    address: SocketAddress,
 
     /// Admin password for authenticating priviledged requests.
     ///
