@@ -6,12 +6,13 @@ use crate::{
 };
 use bytes::Bytes;
 use cid::Cid;
+use core::{num::NonZeroU64, time::Duration};
 use jacquard_common::types::did::Did;
 use mime::Mime;
 use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
 use multihash_codetable::{Code, MultihashDigest};
 use reqwest::{StatusCode, header, header::HeaderValue};
-use std::{num::NonZeroU64, sync::Arc, time::Duration};
+use std::sync::Arc;
 use thiserror::Error;
 use tracing::instrument;
 

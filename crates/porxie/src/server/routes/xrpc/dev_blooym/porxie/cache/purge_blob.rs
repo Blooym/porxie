@@ -1,7 +1,9 @@
 use crate::{
-    AppState,
-    extractors::AdminXrpcAuth,
-    routes::{CACHE_CONTROL_NOCACHE_VALUE, XrpcErrorResponse},
+    server::{
+        ServerState,
+        extractors::AdminXrpcAuth,
+        routes::{CACHE_CONTROL_NOCACHE_VALUE, XrpcErrorResponse},
+    },
     types::blob_cid::BlobCid,
 };
 use axum::{
@@ -16,7 +18,7 @@ use std::sync::Arc;
 
 pub async fn xrpc_cache_purge_blob_handler(
     _auth: AdminXrpcAuth,
-    State(state): State<Arc<AppState>>,
+    State(state): State<Arc<ServerState>>,
     ExtractXrpc(request): ExtractXrpc<PurgeBlobRequest>,
 ) -> Result<
     StatusCode,

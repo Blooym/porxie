@@ -1,10 +1,11 @@
-use crate::routes::CACHE_CONTROL_NOCACHE_VALUE;
 use axum::{
     Json,
     http::{StatusCode, header},
     response::IntoResponse,
 };
 use serde::Serialize;
+
+use crate::server::routes::CACHE_CONTROL_NOCACHE_VALUE;
 
 #[derive(Serialize)]
 struct GetHealthResponse {

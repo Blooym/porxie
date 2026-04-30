@@ -1,4 +1,4 @@
-use crate::AppState;
+use crate::server::ServerState;
 use axum::{
     extract::FromRequestParts,
     http::{StatusCode, request::Parts},
@@ -17,12 +17,12 @@ use subtle::ConstantTimeEq;
 /// Specification: <https://atproto.com/specs/xrpc#admin-token-temporary-specification>.
 pub struct AdminXrpcAuth;
 
-impl FromRequestParts<Arc<AppState>> for AdminXrpcAuth {
+impl FromRequestParts<Arc<ServerState>> for AdminXrpcAuth {
     type Rejection = StatusCode;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &Arc<AppState>,
+        state: &Arc<ServerState>,
     ) -> Result<Self, Self::Rejection> {
         let Ok(basic_auth) =
             TypedHeader::<Authorization<Basic>>::from_request_parts(parts, state).await

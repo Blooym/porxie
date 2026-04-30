@@ -1,4 +1,4 @@
-use crate::{AppState, extractors::AdminXrpcAuth};
+use crate::server::{ServerState, extractors::AdminXrpcAuth};
 use axum::extract::State;
 use jacquard_axum::ExtractXrpc;
 use lexgen::dev_blooym::porxie::cache::purge_actor::PurgeActorRequest;
@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 pub async fn xrpc_cache_purge_actor_handler(
     _auth: AdminXrpcAuth,
-    State(state): State<Arc<AppState>>,
+    State(state): State<Arc<ServerState>>,
     ExtractXrpc(request): ExtractXrpc<PurgeActorRequest>,
 ) -> StatusCode {
     if let Some(ref policy_client) = state.policy_client {

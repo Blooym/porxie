@@ -1,4 +1,4 @@
-use std::{cmp, num::NonZeroU64};
+use core::{cmp, num::NonZeroU64};
 use thiserror::Error;
 
 #[derive(Debug, Error)]

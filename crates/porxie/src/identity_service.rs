@@ -1,4 +1,5 @@
 use crate::http::PORXIE_USER_AGENT;
+use core::{str::FromStr, time::Duration};
 use jacquard_common::types::did::Did;
 use jacquard_identity::{
     JacquardResolver,
@@ -6,7 +7,7 @@ use jacquard_identity::{
 };
 use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
 use reqwest::Url;
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::sync::Arc;
 use thiserror::Error;
 use tracing::instrument;
 

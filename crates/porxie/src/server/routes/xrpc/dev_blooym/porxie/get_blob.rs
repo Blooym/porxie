@@ -1,4 +1,4 @@
-use crate::{AppState, routes::get_blob_handler};
+use crate::server::{ServerState, routes::get_blob_handler};
 use axum::{
     extract::{Path, State},
     response::IntoResponse,
@@ -11,7 +11,7 @@ use std::sync::Arc;
 /// regular get blob request. May become the primary method
 /// in the future.
 pub async fn xrpc_compat_get_blob_handler(
-    state: State<Arc<AppState>>,
+    state: State<Arc<ServerState>>,
     ExtractXrpc(request): ExtractXrpc<GetBlobRequest>,
 ) -> impl IntoResponse {
     get_blob_handler(

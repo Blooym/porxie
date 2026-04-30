@@ -66,8 +66,8 @@ pub fn is_mime_allowed(mime: &Mime, allowed: &[Mime]) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use core::str::FromStr;
     use mime::Mime;
-    use std::str::FromStr;
 
     #[test]
     fn no_match() {

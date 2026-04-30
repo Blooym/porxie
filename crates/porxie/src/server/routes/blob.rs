@@ -1,8 +1,10 @@
 use crate::{
-    AppState,
     blob_service::{BlobDownloadError, BlobOwnershipError, BlobUrlResolver},
     policy_client::PolicyDecision,
-    routes::{CACHE_CONTROL_NOCACHE_VALUE, XrpcErrorResponse},
+    server::{
+        ServerState,
+        routes::{CACHE_CONTROL_NOCACHE_VALUE, XrpcErrorResponse},
+    },
     types::blob_cid::BlobCid,
 };
 use axum::{
@@ -18,7 +20,7 @@ use std::sync::Arc;
 /// Fetch a blob from a given upstream and return it.
 pub async fn get_blob_handler(
     Path((raw_did, raw_cid)): Path<(String, String)>,
-    State(state): State<Arc<AppState>>,
+    State(state): State<Arc<ServerState>>,
 ) -> Result<
     Response,
     (

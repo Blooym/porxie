@@ -2,12 +2,11 @@
 
 mod blob_service;
 mod cache;
-mod extractors;
 mod http;
 mod identity_service;
 mod mime;
 mod policy_client;
-mod routes;
+mod server;
 mod types;
 
 use crate::{
@@ -15,39 +14,15 @@ use crate::{
     cache::compute_cache_sizes,
     identity_service::{IdentityService, IdentityServiceOptions},
     policy_client::{PolicyClient, PolicyClientOptions},
-    routes::{
-        get_blob_handler, get_index_handler,
-        xrpc::{
-            dev_blooym::porxie::{
-                cache::{xrpc_cache_purge_actor_handler, xrpc_cache_purge_blob_handler},
-                xrpc_compat_get_blob_handler,
-            },
-            xrpc_fallback_handler, xrpc_get_health_handler,
-        },
-    },
+    server::{PorxieServer, PorxieServerOptions, address::Address},
 };
 use ::mime::Mime;
-use anyhow::{Context, bail};
-use axum::{
-    Router,
-    extract::Request,
-    http::{HeaderName, HeaderValue, StatusCode, header},
-    middleware::{self as axum_middleware, Next},
-    response::Response,
-    routing::{any, get, post},
-};
+use axum::http::{HeaderName, HeaderValue};
 use bytesize::ByteSize;
 use clap::{Args, Parser};
+use core::num::NonZeroU64;
 use dotenvy::dotenv;
 use reqwest::Url;
-use std::{net::SocketAddr, num::NonZeroU64, path::PathBuf, str::FromStr, sync::Arc};
-use tower_http::{
-    catch_panic::CatchPanicLayer,
-    normalize_path::NormalizePathLayer,
-    timeout::TimeoutLayer,
-    trace::{self, DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer},
-};
-use tracing::Level;
 use tracing_subscriber::EnvFilter;
 
 // Jemalloc seems to perform better compared to most system allocators,
@@ -57,34 +32,6 @@ use tracing_subscriber::EnvFilter;
 // It especially performs a lot better on MUSL (when last benchmarked).
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
-
-#[derive(Debug, Clone)]
-enum AddressType {
-    /// An IP socket address.
-    Ip(SocketAddr),
-    /// A UNIX socket path.
-    #[cfg(unix)]
-    Unix(PathBuf),
-}
-
-impl FromStr for AddressType {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        #[cfg(unix)]
-        if let Some(path) = s.strip_prefix("unix:") {
-            return Ok(AddressType::Unix(PathBuf::from(path)));
-        }
-        if let Some(ip) = s.strip_prefix("ip:") {
-            return Ok(ip.parse::<SocketAddr>().map(AddressType::Ip)?);
-        }
-
-        #[cfg(unix)]
-        bail!("unknown address binding type, expected 'ip:<addr>' or 'unix:<path>'".to_string(),);
-        #[cfg(not(unix))]
-        bail!("unknown address binding type, expected 'ip:<addr>'".to_string());
-    }
-}
 
 #[derive(Parser)]
 #[clap(
@@ -124,7 +71,7 @@ struct ServerArgs {
         env = "PORXIE_SERVER_ADDRESS",
         default_value = "ip:127.0.0.1:6314"
     )]
-    address: AddressType,
+    address: Address,
 
     /// Admin password for authenticating priviledged requests.
     ///
@@ -417,21 +364,6 @@ struct PolicyServiceArgs {
     http_connect_timeout: humantime::Duration,
 }
 
-struct AppState {
-    // Authentication.
-    admin_password: Option<String>,
-    // Blob handling.
-    allowed_mimetypes: Vec<Mime>,
-    blob_service: BlobService,
-    cache_control_header: HeaderValue,
-    max_blob_size: NonZeroU64,
-    // Policy.
-    policy_client: Option<PolicyClient>,
-    policy_fail_open: bool,
-    // Identity.
-    identity_service: IdentityService,
-}
-
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
@@ -440,9 +372,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
     let args = AppArgs::parse();
 
-    // Setup state.
     let cache_sizes = compute_cache_sizes(args.cache.size)?;
-    let app_state = Arc::new(AppState {
+    let server = PorxieServer::new(PorxieServerOptions {
+        blob_processing_timeout: args.blob.processing_timeout.into(),
         identity_service: IdentityService::new(IdentityServiceOptions {
             cache_memory_allocation: cache_sizes.identity,
             cache_ttl: args.cache.identity_ttl.into(),
@@ -481,86 +413,9 @@ async fn main() -> anyhow::Result<()> {
         policy_fail_open: args.policy.fail_open,
     });
 
-    // Setup router.
-    let router = Router::new()
-        .route("/", get(get_index_handler))
-        .route(
-            "/{did}/{cid}",
-            get(get_blob_handler).layer(TimeoutLayer::with_status_code(
-                StatusCode::REQUEST_TIMEOUT,
-                args.blob.processing_timeout.into(),
-            )),
-        )
-        .nest(
-            "/xrpc",
-            Router::new()
-                .route("/_health", get(xrpc_get_health_handler))
-                .route(
-                    "/dev.blooym.porxie.getBlob",
-                    get(xrpc_compat_get_blob_handler).layer(TimeoutLayer::with_status_code(
-                        StatusCode::REQUEST_TIMEOUT,
-                        args.blob.processing_timeout.into(),
-                    )),
-                )
-                .route(
-                    "/dev.blooym.porxie.cache.purgeActor",
-                    post(xrpc_cache_purge_actor_handler),
-                )
-                .route(
-                    "/dev.blooym.porxie.cache.purgeBlob",
-                    post(xrpc_cache_purge_blob_handler),
-                )
-                // Ensure /xrpc/... routes don't fall through elsewhere.
-                .route("/{rest}", any(xrpc_fallback_handler)),
-        )
-        .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(trace::DefaultMakeSpan::new().level(Level::INFO))
-                .on_request(DefaultOnRequest::default().level(Level::DEBUG))
-                .on_response(DefaultOnResponse::default().level(Level::INFO))
-                .on_failure(DefaultOnFailure::default().level(Level::ERROR)),
-        )
-        .layer(NormalizePathLayer::trim_trailing_slash())
-        .layer(CatchPanicLayer::new())
-        .layer(axum_middleware::from_fn(additional_headers_middleware))
-        .with_state(app_state);
-
-    // Start server listener on specified address.
-    match args.server.address {
-        AddressType::Ip(ip) => {
-            let listener = tokio::net::TcpListener::bind(ip)
-                .await
-                .context("failed to bind tcp listener")?;
-            tracing::info!("server listening on http://{ip}");
-            axum::serve(listener, router)
-                .with_graceful_shutdown(shutdown_signal())
-                .await?;
-        }
-        #[cfg(unix)]
-        AddressType::Unix(path) => {
-            let _ = std::fs::remove_file(&path);
-            let listener =
-                tokio::net::UnixListener::bind(&path).context("failed to bind unix listener")?;
-            tracing::info!("server listening on unix:{}", path.display());
-            axum::serve(listener, router)
-                .with_graceful_shutdown(shutdown_signal())
-                .await?;
-            let _ = std::fs::remove_file(&path);
-        }
-    }
+    server.start(args.server.address, shutdown_signal()).await?;
 
     Ok(())
-}
-
-async fn additional_headers_middleware(req: Request, next: Next) -> Response {
-    let mut res = next.run(req).await;
-    let res_headers = res.headers_mut();
-    res_headers.insert(
-        header::SERVER,
-        const { HeaderValue::from_static(env!("CARGO_PKG_NAME")) },
-    );
-    res_headers.insert("X-Robots-Tag", const { HeaderValue::from_static("none") });
-    res
 }
 
 // https://github.com/tokio-rs/axum/blob/15917c6dbcb4a48707a20e9cfd021992a279a662/examples/graceful-shutdown/src/main.rs#L55
@@ -580,7 +435,7 @@ async fn shutdown_signal() {
     };
 
     #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
+    let terminate = core::future::pending::<()>();
 
     tokio::select! {
         _ = ctrl_c => {},
