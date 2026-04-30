@@ -28,7 +28,7 @@ pub async fn delete_cache_handler(
         Json<ErrorResponse>,
     ),
 > {
-    if state
+    if !state
         .auth_token
         .as_ref()
         .map(|expected| expected.as_bytes().ct_eq(bearer.token().as_bytes()).into())
