@@ -6,7 +6,7 @@ use jacquard_identity::{
 };
 use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
 use reqwest::Url;
-use std::{sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -57,7 +57,10 @@ impl IdentityService {
                     .map_err(CreateIdentityServiceError::HttpClient)?,
                 ResolverOptions {
                     plc_source: PlcSource::PlcDirectory {
-                        base: options.plc_directory_url,
+                        base: jacquard_common::deps::fluent_uri::Uri::from_str(
+                            options.plc_directory_url.as_str(),
+                        )
+                        .unwrap(),
                     },
                     public_fallback_for_handle: true,
                     validate_doc_id: true,
@@ -85,7 +88,10 @@ impl IdentityService {
     #[instrument(skip_all, fields(did = %did))]
     pub async fn pds_for_did(&self, did: &Did<'static>) -> Result<Url, Arc<IdentityError>> {
         self.cache
-            .try_get_with_by_ref(did, self.resolver.pds_for_did(did))
+            .try_get_with_by_ref(did, async {
+                let url = self.resolver.pds_for_did(did).await?;
+                Ok(Url::parse(url.as_str()).unwrap())
+            })
             .await
     }
 

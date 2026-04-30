@@ -1,0 +1,32 @@
+{
+  "lexicon": 1,
+  "id": "net.dollware.porxie.clearBlobCache",
+  "defs": {
+    "main": {
+      "type": "procedure",
+      "input": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "cid"
+          ],
+          "properties": {
+            "cid": {
+              "type": "string",
+              "format": "cid",
+              "description": "The CID of the blob."
+            }
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    }
+  }
+}

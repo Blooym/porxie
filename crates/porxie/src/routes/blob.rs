@@ -223,7 +223,8 @@ pub async fn get_blob_handler(
         )
         .header(
             header::CONTENT_DISPOSITION,
-            const { HeaderValue::from_static("attachment") },
+            HeaderValue::from_str(&format!(r#"attachment, filename="{cid}""#))
+                .unwrap_or(const { HeaderValue::from_static("attachment") }),
         )
         .body(Body::from(blob.bytes))
         .expect("response should always build successfully"))

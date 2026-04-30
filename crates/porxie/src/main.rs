@@ -2,6 +2,7 @@
 
 mod blob_service;
 mod cache;
+mod extractors;
 mod http;
 mod identity_service;
 mod mime;
@@ -14,7 +15,15 @@ use crate::{
     cache::compute_cache_sizes,
     identity_service::{IdentityService, IdentityServiceOptions},
     policy_client::{PolicyClient, PolicyClientOptions},
-    routes::{delete_cache_handler, get_blob_handler, get_health_handler, get_index_handler},
+    routes::{
+        get_blob_handler, get_index_handler,
+        xrpc::{
+            get_health_handler,
+            net_dollware::porxie::{
+                clear_actor_cache_handler, clear_blob_cache_handler, get_blob_handler_xrpc_compat,
+            },
+        },
+    },
 };
 use ::mime::Mime;
 use anyhow::{Context, bail};
@@ -24,7 +33,7 @@ use axum::{
     http::{HeaderName, HeaderValue, StatusCode, header},
     middleware::{self as axum_middleware, Next},
     response::Response,
-    routing::{delete, get},
+    routing::{get, post},
 };
 use bytesize::ByteSize;
 use clap::{Args, Parser};
@@ -116,15 +125,17 @@ struct ServerArgs {
     )]
     address: AddressType,
 
-    /// Bearer token for authenticating admin requests.
+    /// Admin password for authenticating priviledged requests.
     ///
     /// When unset, all authenticated endpoints will reject requests with HTTP 401.
+    ///
+    /// Authenticated requests always expect the username `admin` as per specification.
     #[arg(
-        id = "SA_SERVER_AUTH_TOKEN",
-        long = "server-auth-token",
-        env = "PORXIE_SERVER_AUTH_TOKEN"
+        id = "SA_SERVER_ADMIN_PASSWORD",
+        long = "server-admin-password",
+        env = "PORXIE_SERVER_ADMIN_TOKEN"
     )]
-    auth_token: Option<String>,
+    admin_password: Option<String>,
 }
 
 #[derive(Args)]
@@ -350,9 +361,9 @@ struct PolicyServiceArgs {
     ///
     /// As pipes are used as a delimiter, they cannot be contained in headers.
     ///
-    /// Example (cli): '--policy-request-headers "Authorization: Bearer token" --policy-request-headers "X-Api-Key: your-key"'
+    /// Example (cli): '--policy-request-headers "X-Hello: world" --policy-request-headers "X-Foo: bar"'
     ///
-    /// Example (env): 'PORXIE_POLICY_REQUEST_HEADERS="Authorization: Bearer token|X-Api-Key: your-key"'
+    /// Example (env): 'PORXIE_POLICY_REQUEST_HEADERS="X-Hello: world|X-Foo: bar"'
     #[arg(
         id = "PA_POLICY_REQ_HEADERS",
         long = "policy-request-headers",
@@ -407,7 +418,7 @@ struct PolicyServiceArgs {
 
 struct AppState {
     // Authentication.
-    auth_token: Option<String>,
+    admin_password: Option<String>,
     // Blob handling.
     allowed_mimetypes: Vec<Mime>,
     blob_service: BlobService,
@@ -461,7 +472,7 @@ async fn main() -> anyhow::Result<()> {
             ownership_cache_ttl: args.cache.ownership_ttl.into(),
         })?,
 
-        auth_token: args.server.auth_token,
+        admin_password: args.server.admin_password,
         allowed_mimetypes: args.blob.allowed_mimetypes,
         max_blob_size: args.blob.max_size,
         cache_control_header: args.blob.cache_header,
@@ -472,7 +483,6 @@ async fn main() -> anyhow::Result<()> {
     // Setup router.
     let router = Router::new()
         .route("/", get(get_index_handler))
-        .route("/health", get(get_health_handler))
         .route(
             "/{did}/{cid}",
             get(get_blob_handler).layer(TimeoutLayer::with_status_code(
@@ -480,7 +490,26 @@ async fn main() -> anyhow::Result<()> {
                 args.blob.processing_timeout.into(),
             )),
         )
-        .route("/cache/{id}", delete(delete_cache_handler))
+        .nest(
+            "/xrpc",
+            Router::new()
+                .route("/_health", get(get_health_handler))
+                .route(
+                    "/net.dollware.porxie.getBlob",
+                    get(get_blob_handler_xrpc_compat).layer(TimeoutLayer::with_status_code(
+                        StatusCode::REQUEST_TIMEOUT,
+                        args.blob.processing_timeout.into(),
+                    )),
+                )
+                .route(
+                    "/net.dollware.porxie.clearActorCache",
+                    post(clear_actor_cache_handler),
+                )
+                .route(
+                    "/net.dollware.porxie.clearBlobCache",
+                    post(clear_blob_cache_handler),
+                ),
+        )
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(trace::DefaultMakeSpan::new().level(Level::INFO))

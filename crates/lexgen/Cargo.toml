@@ -1,0 +1,16 @@
+[package]
+name = "lexgen"
+version = "0.0.0"
+edition = "2024"
+
+[features]
+default = ["net_dollware"]
+net_dollware = []
+
+[dependencies]
+jacquard-common = { version = "0.11.0", default-features = false }
+jacquard-derive = { version = "0.11.0", default-features = false }
+jacquard-lexicon = { version = "0.11.1", default-features = false }
+miette = { version = "7.6.0", default-features = false }
+serde = { version = "1.0.228", default-features = false }
+thiserror = { version = "2.0.18", default-features = false }

@@ -1,0 +1,72 @@
+{
+  "lexicon": 1,
+  "id": "net.dollware.porxie.getBlobPolicy",
+  "defs": {
+    "main": {
+      "type": "query",
+      "parameters": {
+        "type": "params",
+        "required": [
+          "did",
+          "cid"
+        ],
+        "properties": {
+          "did": {
+            "type": "string",
+            "format": "did",
+            "description": "The DID of the account."
+          },
+          "cid": {
+            "type": "string",
+            "format": "cid",
+            "description": "The CID of the blob."
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "policy"
+          ],
+          "properties": {
+            "policy": {
+              "type": "union",
+              "refs": [
+                "#allowed",
+                "#restricted",
+                "#unlisted"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "allowed": {
+      "type": "object",
+      "description": "Blob is allowed to be served.",
+      "properties": {}
+    },
+    "restricted": {
+      "type": "object",
+      "description": "Blob is explicitly restricted. It may have been removed due to moderation reasons.",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "An optional reason provided for this policy being applied to provide context to the requesting service."
+        }
+      }
+    },
+    "unlisted": {
+      "type": "object",
+      "description": "Blob is not being served at operator discretion. It may not meet the requirements for the service.",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "An optional reason provided for this policy being applied to provide context to the requesting service."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "lexicon": 1,
+  "id": "net.dollware.porxie.clearActorCache",
+  "defs": {
+    "main": {
+      "type": "procedure",
+      "input": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "did"
+          ],
+          "properties": {
+            "did": {
+              "type": "string",
+              "format": "did",
+              "description": "The DID of the account."
+            }
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    }
+  }
+}

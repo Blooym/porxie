@@ -172,7 +172,7 @@ impl BlobService {
                     }
                 };
 
-                let validated_bytes = {
+                let bytes = {
                     let response = self.http_client.get(blob_url).send().await.map_err(|err| {
                         tracing::warn!("failed to request blob from origin: {err:?}");
                         BlobDownloadError::FetchFailure
@@ -211,8 +211,9 @@ impl BlobService {
                     //
                     // This operation is done via spawn_blocking as creating the digest will block
                     // this task's executor from switching to other tasks for as long it runs.
+                    //
+                    // Passes the bytes as a return value instead of incrementing the reference count.
                     tokio::task::spawn_blocking({
-                        let bytes = bytes.clone();
                         let cid = *cid;
                         move || {
                             // Enabled Multihashes are set in the multihash-codetable crate features.
@@ -234,13 +235,11 @@ impl BlobService {
                                 return Err(BlobDownloadError::CidMismatch);
                             }
 
-                            Ok(())
+                            Ok(bytes)
                         }
                     })
                     .await
-                    .expect("CID computing task should not panic")?;
-
-                    bytes
+                    .expect("CID computing task should not panic")?
                 };
 
                 // Infer MIME type from content bytes rather than headers; this is fallible
@@ -248,7 +247,7 @@ impl BlobService {
                 //
                 // TODO: Merge this with the download stream process to reject bad MIMEs
                 // early?
-                let mime_type = sniff_mime(&validated_bytes);
+                let mime_type = sniff_mime(&bytes);
                 if !is_mime_allowed(&mime_type, allowed_mimetypes) {
                     tracing::debug!("blob was inferred to be a disallowed mime type: {mime_type}");
                     return Err(BlobDownloadError::ForbiddenMimeType);
@@ -257,10 +256,7 @@ impl BlobService {
                 // Mark this DID+CID pair as ownership-verified since we just fetched it from the origin.
                 self.ownership_cache.insert((*cid, did.clone()), ()).await;
 
-                Ok(BlobData {
-                    bytes: validated_bytes,
-                    mime_type,
-                })
+                Ok(BlobData { bytes, mime_type })
             })
             .await
     }
