@@ -12,7 +12,7 @@ use crate::{
     server::{
         middlewares::server_headers_middleware,
         routes::{
-            get_index_handler,
+            get_blob_handler, get_index_handler,
             xrpc::{
                 dev_blooym::porxie::{
                     cache::{xrpc_cache_purge_actor_handler, xrpc_cache_purge_blob_handler},
@@ -76,7 +76,7 @@ impl PorxieServer {
             .route("/", get(get_index_handler))
             .route(
                 "/{did}/{cid}",
-                get(get_index_handler).layer(TimeoutLayer::with_status_code(
+                get(get_blob_handler).layer(TimeoutLayer::with_status_code(
                     StatusCode::REQUEST_TIMEOUT,
                     options.blob_processing_timeout,
                 )),
