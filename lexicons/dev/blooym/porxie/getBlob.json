@@ -51,12 +51,6 @@
           "name": "InternalServerError"
         },
         {
-          "name": "MalformedCid"
-        },
-        {
-          "name": "MalformedDid"
-        },
-        {
           "name": "PolicyForbidden"
         }
       ]

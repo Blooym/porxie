@@ -46,56 +46,45 @@ pub struct GetBlobOutput {
 #[serde(tag = "error", content = "message")]
 #[serde(bound(deserialize = "'de: 'a"))]
 pub enum GetBlobError<'a> {
-    #[serde(rename = "MalformedDid")]
-    MalformedDid(Option<CowStr<'a>>),
-    #[serde(rename = "MalformedCid")]
-    MalformedCid(Option<CowStr<'a>>),
-    #[serde(rename = "PolicyForbidden")]
-    PolicyForbidden(Option<CowStr<'a>>),
-    #[serde(rename = "InternalServerError")]
-    InternalServerError(Option<CowStr<'a>>),
+    #[serde(rename = "BlobCidMismatch")]
+    BlobCidMismatch(Option<CowStr<'a>>),
+    #[serde(rename = "BlobFetchFailed")]
+    BlobFetchFailed(Option<CowStr<'a>>),
+    #[serde(rename = "BlobForbiddenType")]
+    BlobForbiddenType(Option<CowStr<'a>>),
     #[serde(rename = "BlobNotFound")]
     BlobNotFound(Option<CowStr<'a>>),
     #[serde(rename = "BlobTooLarge")]
     BlobTooLarge(Option<CowStr<'a>>),
-    #[serde(rename = "BlobForbiddenType")]
-    BlobForbiddenType(Option<CowStr<'a>>),
-    #[serde(rename = "BlobCidMismatch")]
-    BlobCidMismatch(Option<CowStr<'a>>),
-    #[serde(rename = "CidUnsupported")]
-    CidUnsupported(Option<CowStr<'a>>),
     #[serde(rename = "CannotResolve")]
     CannotResolve(Option<CowStr<'a>>),
-    #[serde(rename = "BlobFetchFailed")]
-    BlobFetchFailed(Option<CowStr<'a>>),
+    #[serde(rename = "CidUnsupported")]
+    CidUnsupported(Option<CowStr<'a>>),
+    #[serde(rename = "InternalServerError")]
+    InternalServerError(Option<CowStr<'a>>),
+    #[serde(rename = "PolicyForbidden")]
+    PolicyForbidden(Option<CowStr<'a>>),
 }
 
 impl core::fmt::Display for GetBlobError<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::MalformedDid(msg) => {
-                write!(f, "MalformedDid")?;
+            Self::BlobCidMismatch(msg) => {
+                write!(f, "BlobCidMismatch")?;
                 if let Some(msg) = msg {
                     write!(f, ": {}", msg)?;
                 }
                 Ok(())
             }
-            Self::MalformedCid(msg) => {
-                write!(f, "MalformedCid")?;
+            Self::BlobFetchFailed(msg) => {
+                write!(f, "BlobFetchFailed")?;
                 if let Some(msg) = msg {
                     write!(f, ": {}", msg)?;
                 }
                 Ok(())
             }
-            Self::PolicyForbidden(msg) => {
-                write!(f, "PolicyForbidden")?;
-                if let Some(msg) = msg {
-                    write!(f, ": {}", msg)?;
-                }
-                Ok(())
-            }
-            Self::InternalServerError(msg) => {
-                write!(f, "InternalServerError")?;
+            Self::BlobForbiddenType(msg) => {
+                write!(f, "BlobForbiddenType")?;
                 if let Some(msg) = msg {
                     write!(f, ": {}", msg)?;
                 }
@@ -115,15 +104,8 @@ impl core::fmt::Display for GetBlobError<'_> {
                 }
                 Ok(())
             }
-            Self::BlobForbiddenType(msg) => {
-                write!(f, "BlobForbiddenType")?;
-                if let Some(msg) = msg {
-                    write!(f, ": {}", msg)?;
-                }
-                Ok(())
-            }
-            Self::BlobCidMismatch(msg) => {
-                write!(f, "BlobCidMismatch")?;
+            Self::CannotResolve(msg) => {
+                write!(f, "CannotResolve")?;
                 if let Some(msg) = msg {
                     write!(f, ": {}", msg)?;
                 }
@@ -136,15 +118,15 @@ impl core::fmt::Display for GetBlobError<'_> {
                 }
                 Ok(())
             }
-            Self::CannotResolve(msg) => {
-                write!(f, "CannotResolve")?;
+            Self::InternalServerError(msg) => {
+                write!(f, "InternalServerError")?;
                 if let Some(msg) = msg {
                     write!(f, ": {}", msg)?;
                 }
                 Ok(())
             }
-            Self::BlobFetchFailed(msg) => {
-                write!(f, "BlobFetchFailed")?;
+            Self::PolicyForbidden(msg) => {
+                write!(f, "PolicyForbidden")?;
                 if let Some(msg) = msg {
                     write!(f, ": {}", msg)?;
                 }
@@ -204,37 +186,37 @@ pub mod get_blob_state {
     }
     /// State trait tracking which required fields have been set
     pub trait State: sealed::Sealed {
-        type Did;
         type Cid;
+        type Did;
     }
     /// Empty state - all required fields are unset
     pub struct Empty(());
     impl sealed::Sealed for Empty {}
     impl State for Empty {
-        type Did = Unset;
         type Cid = Unset;
-    }
-    ///State transition - sets the `did` field to Set
-    pub struct SetDid<S: State = Empty>(PhantomData<fn() -> S>);
-    impl<S: State> sealed::Sealed for SetDid<S> {}
-    impl<S: State> State for SetDid<S> {
-        type Did = Set<members::did>;
-        type Cid = S::Cid;
+        type Did = Unset;
     }
     ///State transition - sets the `cid` field to Set
     pub struct SetCid<S: State = Empty>(PhantomData<fn() -> S>);
     impl<S: State> sealed::Sealed for SetCid<S> {}
     impl<S: State> State for SetCid<S> {
-        type Did = S::Did;
         type Cid = Set<members::cid>;
+        type Did = S::Did;
+    }
+    ///State transition - sets the `did` field to Set
+    pub struct SetDid<S: State = Empty>(PhantomData<fn() -> S>);
+    impl<S: State> sealed::Sealed for SetDid<S> {}
+    impl<S: State> State for SetDid<S> {
+        type Cid = S::Cid;
+        type Did = Set<members::did>;
     }
     /// Marker types for field names
     #[allow(non_camel_case_types)]
     pub mod members {
-        ///Marker type for the `did` field
-        pub struct did(());
         ///Marker type for the `cid` field
         pub struct cid(());
+        ///Marker type for the `did` field
+        pub struct did(());
     }
 }
 
@@ -304,8 +286,8 @@ where
 impl<'a, S> GetBlobBuilder<'a, S>
 where
     S: get_blob_state::State,
-    S::Did: get_blob_state::IsSet,
     S::Cid: get_blob_state::IsSet,
+    S::Did: get_blob_state::IsSet,
 {
     /// Build the final struct
     pub fn build(self) -> GetBlob<'a> {
