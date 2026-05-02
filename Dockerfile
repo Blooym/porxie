@@ -1,37 +1,26 @@
-# ----------
-#   SETUP
-# ----------
-FROM alpine:latest AS setup
-RUN adduser -S -s /bin/false -D porxie
-
-# -----------
-#    BUILD
-# -----------
+# Build Porxie.
 FROM rust:1-alpine AS build
 WORKDIR /build
 RUN apk add --no-cache --update build-base
 
-# Pre-cache dependencies
 COPY Cargo.toml Cargo.lock ./
-COPY crates/porxie/Cargo.toml crates/porxie/Cargo.toml
-COPY crates/lexgen/Cargo.toml crates/lexgen/Cargo.toml
-RUN mkdir -p crates/porxie/src crates/lexgen/src \
-    && echo "// Placeholder" > crates/porxie/src/lib.rs \
-    && echo "// Placeholder" > crates/lexgen/src/lib.rs \
-    && cargo build --release \
-    && rm crates/porxie/src/lib.rs crates/lexgen/src/lib.rs
-
-# Build
 COPY crates ./crates
-RUN cargo build --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/build/target \
+    cargo build --release && \
+    cp target/release/porxie /build/porxie
 
-# -----------
-#   RUNTIME
-# -----------
+
+# Environment to steal some files from.
+FROM alpine:latest AS setup
+RUN adduser -S -s /bin/false -D porxie
+
+
+# Runtime
 FROM scratch
 WORKDIR /opt
 
-COPY --from=build /build/target/release/porxie /usr/bin/porxie
+COPY --from=build /build/porxie /usr/bin/porxie
 COPY --from=setup /etc/passwd /etc/passwd
 COPY --from=setup /bin/false /bin/false
 USER porxie
