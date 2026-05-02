@@ -296,9 +296,7 @@ struct CacheArgs {
 struct PolicyServiceArgs {
     /// Policy service URL that DID+CID pairs will be checked against.
     ///
-    /// Requests are sent as HTTP GET <url>/<did>/<cid>.
-    ///
-    /// The service is expected to return HTTP 200 (OK) if permitted or HTTP 410 (GONE) if restricted.
+    /// Requests are sent via XRPC tp <url>/xrpc/dev.blooym.porxie.getBlobPolicy?did=<did>&cid=<cid>.
     #[arg(id = "PA_POLICY_URL", long = "policy-url", env = "PORXIE_POLICY_URL")]
     url: Option<Url>,
 
@@ -331,8 +329,7 @@ struct PolicyServiceArgs {
     )]
     request_headers: Vec<(HeaderName, HeaderValue)>,
 
-    /// Allow requests to proceed if the policy service is unavailable or returns an
-    /// unexpected status code.
+    /// Allow requests to proceed if the policy service is unavailable..
     ///
     /// Warning: enabling this means restricted blobs may be served when the policy service is unreachable.
     #[arg(

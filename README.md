@@ -78,14 +78,9 @@ To run Porxie with Nix, you can use the [package](https://search.nixos.org/packa
 
 Porxie can optionally check with an external HTTP service before serving any blob. You build and run this service yourself - Porxie just calls it and acts on the response. This is useful for things like content takedowns or blob allow lists.
 
-For every incoming request, Porxie sends `GET <policy-service-url>/<did>/<cid>` and expects one of the following responses:
+For every incoming request, Porxie sends `GET <policy-service-url>/xrpc/dev.blooym.porxie.getBlobPolicy` and expects a response that conforms to the (`lexicon xrpc output`)[lexicons/dev/blooym/porxie/getBlobPolicy.json].
 
-- **200 OK** - the blob is allowed and will be served.
-- **410 Gone** - the blob is restricted and Porxie will refuse to serve it to the client.
-
-Any other status code is treated as an error for now.
-
-Policy decisions are cached per DID+CID pair, so your service won't be hit on every request. To clear a cached decision early, use the `DELETE /cache/{cid}` endpoint.
+Policy decisions are cached per DID+CID pair, so your service won't be hit on every request. The policy cache can be cleared for a blob or actor via the cache clearing xrpc endpoints.
 
 By default, Porxie will fail-closed: if the policy service errors, the blob request fails too. This can be changed to fail-open if preferred.
 
@@ -248,10 +243,7 @@ All options can be set via flags, environment variables, or a `.env` file. For t
 --policy-url <PA_POLICY_URL>
     Policy service URL that DID+CID pairs will be checked against.
 
-    Requests are sent as HTTP GET <url>/<did>/<cid>.
-
-    The service is expected to return HTTP 200 (OK) if permitted or HTTP 410 (GONE) if
-    restricted.
+    Requests are sent via XRPC tp <url>/xrpc/dev.blooym.porxie.getBlobPolicy?did=<did>&cid=<cid>.
 
     [env: PORXIE_POLICY_URL=]
 
@@ -271,8 +263,7 @@ All options can be set via flags, environment variables, or a `.env` file. For t
     [env: PORXIE_POLICY_REQUEST_HEADERS=]
 
 --policy-fail-open
-    Allow requests to proceed if the policy service is unavailable or returns an
-    unexpected status code.
+    Allow requests to proceed if the policy service is unavailable.
 
     Warning: enabling this means restricted blobs may be served when the policy service
     is unreachable.
