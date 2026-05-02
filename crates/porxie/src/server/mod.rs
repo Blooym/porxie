@@ -36,6 +36,7 @@ use reqwest::StatusCode;
 use std::sync::Arc;
 use tower_http::{
     catch_panic::CatchPanicLayer,
+    cors::CorsLayer,
     normalize_path::NormalizePathLayer,
     timeout::TimeoutLayer,
     trace::{self, DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer},
@@ -103,6 +104,10 @@ impl PorxieServer {
                     // Ensure /xrpc/... routes don't fall through elsewhere.
                     .route("/{rest}", any(xrpc_fallback_handler)),
             )
+            .layer(CatchPanicLayer::new())
+            .layer(NormalizePathLayer::trim_trailing_slash())
+            .layer(axum_middleware::from_fn(server_headers_middleware))
+            .layer(CorsLayer::permissive())
             .layer(
                 TraceLayer::new_for_http()
                     .make_span_with(trace::DefaultMakeSpan::new().level(Level::INFO))
@@ -110,9 +115,6 @@ impl PorxieServer {
                     .on_response(DefaultOnResponse::default().level(Level::INFO))
                     .on_failure(DefaultOnFailure::default().level(Level::ERROR)),
             )
-            .layer(NormalizePathLayer::trim_trailing_slash())
-            .layer(CatchPanicLayer::new())
-            .layer(axum_middleware::from_fn(server_headers_middleware))
             .with_state(Arc::new(ServerState {
                 admin_password: options.admin_password,
                 allowed_mimetypes: options.allowed_mimetypes,
