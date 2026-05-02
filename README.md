@@ -4,7 +4,7 @@
 
 # Porxie
 
-A correct and efficient ATProto blob proxy for secure content delivery.
+A correct and efficient ATProtocol blob proxy for secure content delivery.
 
 </div>
 
@@ -14,7 +14,7 @@ A correct and efficient ATProto blob proxy for secure content delivery.
 - Secure serving: blobs are always served with secure headers to help improve end-user security.
 - MIME filtering:  detects blob content MIME-types and enforces an optional allowlist of permitted types.
 - Policy enforcement: optionally integrate with an external policy service (like an AppView) to control which blobs can be served.
-- In-memory cache: configurable in-memory caching for fast repeat access with support for manual cache purging via authenticated HTTP DELETE.
+- In-memory cache: configurable in-memory caching for fast repeat access with support for manual cache purging.
 
 ## Usage
 
@@ -30,12 +30,14 @@ A correct and efficient ATProto blob proxy for secure content delivery.
 
 ### Run: Binary
 
-To run Porxie directly, install [Rust and Cargo](https://rust-lang.org/tools/install/) and then:
+To run Porxie as a binary, you'll first need to install it locally.
 
-1. Install the binary:
+As Porxie is not packaged or pre-built in many places yet, the easiest way to do this is building it via Cargo directly. Ensure you have a relatively up to date version of [Rust and Cargo](https://rust-lang.org/tools/install/) installed before following these steps:
+
+1. Install the binary, replacing v0.0.0 with the version you want to install:
 
    ```sh
-   cargo install --git https://codeberg.org/Blooym/porxie.git
+   cargo install --git https://codeberg.org/Blooym/porxie.git#v0.0.0 porxie
    ```
 
 2. Run the server with your chosen [configuration](#configuration) options:
@@ -44,9 +46,11 @@ To run Porxie directly, install [Rust and Cargo](https://rust-lang.org/tools/ins
    porxie
    ```
 
-### Run: Docker Compose
+### Run: Docker / Containers
 
-To run Porxie with Docker Compose, you can start with the following `compose.yml` template:
+Porxie is available as a pre-built container image on [DockerHub](https://hub.docker.com/r/blooym/porxie) and can be used with whatever container setup you use. The published image runs a statically linked binary in a `scratch` environment as a non-root user by default.
+
+You can use the following `compose.yml` template as a starting point, adding any [configuration](#configuration) options as environment variables:
 
 ```yaml
 services:
@@ -62,27 +66,24 @@ services:
       - no-new-privileges
 ```
 
-### Run: Nix
+### Run: Nix / NixOS Service
 
-To run Porxie with Nix, you can use the [package](https://search.nixos.org/packages?channel=unstable&query=porxie) or [NixOS module](https://search.nixos.org/options?channel=unstable&query=porxie) provided directly in nixpkgs.
+To run Porxie with Nix, you can either use the [package](https://search.nixos.org/packages?channel=unstable&query=porxie) directly or the [NixOS module](https://search.nixos.org/options?channel=unstable&query=porxie), both of which are provided directly in nixpkgs. Please refer to the Nix search page for NixOS service options.
 
 ## Routes
 
 - [GET] `/{did}/{cid}`: Fetch a blob either from cache or origin.
-- [GET] `/xrpc/dev.blooym.porxie.getBlob?did=<did>&cid=<cid>`: XRPC Compatibility alias for the fetch blob endpoint.
+- [GET] `/xrpc/dev.blooym.porxie.getBlob?did=<did>&cid=<cid>`: XRPC Compatibility shim for the fetch blob endpoint.
 - [POST] `/xrpc/dev.blooym.porxie.cache.purgeActor?did=<did>`: Purge all cached items relating to an actor DID.
 - [POST] `/xrpc/dev.blooym.porxie.cache.purgeBlob?cid=<cid>`: Purge all cache items relating to a blob CID.
 
-
 ## Policy Service
 
-Porxie can optionally check with an external HTTP service before serving any blob. You build and run this service yourself - Porxie just calls it and acts on the response. This is useful for things like content takedowns or blob allow lists.
+Porxie can check with an external HTTP "policy" service before serving blobs, which is useful for moderating content or only serving specific content. You build and run this service yourself - Porxie just sends requests to an XRPC endpoint at [`/xrpc/dev.blooym.porxie.getBlobPolicy`](lexicons/dev/blooym/porxie/getBlobPolicy.json) and acts on the response accordingly.
 
-For every incoming request, Porxie sends `GET <policy-service-url>/xrpc/dev.blooym.porxie.getBlobPolicy` and expects a response that conforms to the (`lexicon xrpc output`)[lexicons/dev/blooym/porxie/getBlobPolicy.json].
+Policy decisions will be cached using the request DID+CID by default to reduce load on the policy service. The duration items are cached can be configured, and the cache can be cleared manually for a blob or actor via the relevant endpoint.
 
-Policy decisions are cached per DID+CID pair, so your service won't be hit on every request. The policy cache can be cleared for a blob or actor via the cache clearing xrpc endpoints.
-
-By default, Porxie will fail-closed: if the policy service errors, the blob request fails too. This can be changed to fail-open if preferred.
+By default, Porxie will fail-closed: if the policy service returns an error is otherwise unavailable, the blob request will fail too. This behaviour can be configured to fail-open if availability is more important than applying policies.
 
 See the [Configuration](#configuration) section for all available policy options.
 

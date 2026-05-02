@@ -1,6 +1,6 @@
 [package]
 name = "porxie"
-description = "A correct and efficient ATProto blob proxy for secure content delivery."
+description = "A correct and efficient ATProtocol blob proxy for secure content delivery."
 authors = ["Blooym"]
 repository = "https://codeberg.org/Blooym/porxie"
 homepage = "https://codeberg.org/Blooym/porxie/src/branch/main/README.md"

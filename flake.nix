@@ -1,5 +1,5 @@
 {
-  description = "Porxie, an ATProto blob proxy for secure content delivery";
+  description = "Porxie, an ATProtocol blob proxy for secure content delivery";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";

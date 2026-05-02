@@ -1,4 +1,4 @@
-// TODO: Transfer this implementation to a standalone ATProto types crate in the future.
+// TODO: Transfer this implementation to a standalone ATProtocol types crate in the future.
 
 use cid::Version;
 use serde::Serialize;
