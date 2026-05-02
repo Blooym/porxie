@@ -81,7 +81,7 @@ struct ServerArgs {
     #[arg(
         id = "SA_SERVER_ADMIN_PASSWORD",
         long = "server-admin-password",
-        env = "PORXIE_SERVER_ADMIN_TOKEN"
+        env = "PORXIE_SERVER_ADMIN_PASSWORD"
     )]
     admin_password: Option<String>,
 }

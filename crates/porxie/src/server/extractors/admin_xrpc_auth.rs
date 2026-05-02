@@ -30,12 +30,11 @@ impl FromRequestParts<Arc<ServerState>> for AdminXrpcAuth {
             return Err(StatusCode::UNAUTHORIZED);
         };
 
-        // Enforce admin as username as per specification.
+        // 'admin' must be the username as per specification.
         if basic_auth.username() != "admin" {
             return Err(StatusCode::UNAUTHORIZED);
         }
 
-        // Check password with a constant time check.
         if !state
             .admin_password
             .as_ref()

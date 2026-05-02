@@ -104,13 +104,13 @@ All options can be set via flags, environment variables, or a `.env` file. For t
     [default: ip:127.0.0.1:6314]
 
 --server-admin-password <SA_SERVER_ADMIN_PASSWORD>
-    Admin password for authenticating privileged requests.
+    Admin password for authenticating priviledged requests.
 
     When unset, all authenticated endpoints will reject requests with HTTP 401.
 
     Authenticated requests always expect the username `admin` as per specification.
 
-    [env: PORXIE_SERVER_ADMIN_TOKEN=]
+    [env: PORXIE_SERVER_ADMIN_PASSWORD=]
 ```
 
 ### Blob
