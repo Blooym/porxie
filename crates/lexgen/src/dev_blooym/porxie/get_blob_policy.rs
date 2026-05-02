@@ -13,15 +13,15 @@ use core::marker::PhantomData;
 
 #[allow(unused_imports)]
 use jacquard_common::deps::codegen::unicode_segmentation::UnicodeSegmentation;
-use jacquard_common::types::string::{Did, Cid};
+use jacquard_common::types::string::{Cid, Did};
 use jacquard_derive::{IntoStatic, lexicon};
 use jacquard_lexicon::lexicon::LexiconDoc;
 use jacquard_lexicon::schema::LexiconSchema;
 
+use crate::dev_blooym::porxie::get_blob_policy;
 #[allow(unused_imports)]
 use jacquard_lexicon::validation::{ConstraintError, ValidationPath};
-use serde::{Serialize, Deserialize};
-use crate::dev_blooym::porxie::get_blob_policy;
+use serde::{Deserialize, Serialize};
 /// Blob is allowed to be served.
 
 #[lexicon]
@@ -44,7 +44,6 @@ pub struct GetBlobPolicy<'a> {
     pub did: Did<'a>,
 }
 
-
 #[lexicon]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
 #[serde(rename_all = "camelCase")]
@@ -52,7 +51,6 @@ pub struct GetBlobPolicyOutput<'a> {
     #[serde(borrow)]
     pub policy: GetBlobPolicyOutputPolicy<'a>,
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
 #[serde(tag = "$type")]
@@ -72,7 +70,7 @@ impl<'a> LexiconSchema for Allowed<'a> {
         "allowed"
     }
     fn lexicon_doc() -> LexiconDoc<'static> {
-        lexicon_doc_dev_blooym_porxie_getBlobPolicy()
+        lexicon_doc_dev_blooym_porxie_get_blob_policy()
     }
     fn validate(&self) -> Result<(), ConstraintError> {
         Ok(())
@@ -87,7 +85,7 @@ impl<'a> LexiconSchema for Forbidden<'a> {
         "forbidden"
     }
     fn lexicon_doc() -> LexiconDoc<'static> {
-        lexicon_doc_dev_blooym_porxie_getBlobPolicy()
+        lexicon_doc_dev_blooym_porxie_get_blob_policy()
     }
     fn validate(&self) -> Result<(), ConstraintError> {
         Ok(())
@@ -118,11 +116,11 @@ impl jacquard_common::xrpc::XrpcEndpoint for GetBlobPolicyRequest {
     type Response = GetBlobPolicyResponse;
 }
 
-fn lexicon_doc_dev_blooym_porxie_getBlobPolicy() -> LexiconDoc<'static> {
+fn lexicon_doc_dev_blooym_porxie_get_blob_policy() -> LexiconDoc<'static> {
+    use alloc::collections::BTreeMap;
     #[allow(unused_imports)]
     use jacquard_common::{CowStr, deps::smol_str::SmolStr, types::blob::MimeType};
     use jacquard_lexicon::lexicon::*;
-    use alloc::collections::BTreeMap;
     LexiconDoc {
         lexicon: Lexicon::Lexicon1,
         id: CowStr::new_static("dev.blooym.porxie.getBlobPolicy"),
@@ -131,9 +129,7 @@ fn lexicon_doc_dev_blooym_porxie_getBlobPolicy() -> LexiconDoc<'static> {
             map.insert(
                 SmolStr::new_static("allowed"),
                 LexUserType::Object(LexObject {
-                    description: Some(
-                        CowStr::new_static("Blob is allowed to be served."),
-                    ),
+                    description: Some(CowStr::new_static("Blob is allowed to be served.")),
                     properties: {
                         #[allow(unused_mut)]
                         let mut map = BTreeMap::new();
@@ -145,9 +141,7 @@ fn lexicon_doc_dev_blooym_porxie_getBlobPolicy() -> LexiconDoc<'static> {
             map.insert(
                 SmolStr::new_static("forbidden"),
                 LexUserType::Object(LexObject {
-                    description: Some(
-                        CowStr::new_static("Blob is not allowed to be served."),
-                    ),
+                    description: Some(CowStr::new_static("Blob is not allowed to be served.")),
                     properties: {
                         #[allow(unused_mut)]
                         let mut map = BTreeMap::new();
@@ -159,33 +153,32 @@ fn lexicon_doc_dev_blooym_porxie_getBlobPolicy() -> LexiconDoc<'static> {
             map.insert(
                 SmolStr::new_static("main"),
                 LexUserType::XrpcQuery(LexXrpcQuery {
-                    parameters: Some(
-                        LexXrpcQueryParameter::Params(LexXrpcParameters {
-                            required: Some(
-                                vec![SmolStr::new_static("did"), SmolStr::new_static("cid")],
-                            ),
-                            properties: {
-                                #[allow(unused_mut)]
-                                let mut map = BTreeMap::new();
-                                map.insert(
-                                    SmolStr::new_static("cid"),
-                                    LexXrpcParametersProperty::String(LexString {
-                                        format: Some(LexStringFormat::Cid),
-                                        ..Default::default()
-                                    }),
-                                );
-                                map.insert(
-                                    SmolStr::new_static("did"),
-                                    LexXrpcParametersProperty::String(LexString {
-                                        format: Some(LexStringFormat::Did),
-                                        ..Default::default()
-                                    }),
-                                );
-                                map
-                            },
-                            ..Default::default()
-                        }),
-                    ),
+                    parameters: Some(LexXrpcQueryParameter::Params(LexXrpcParameters {
+                        required: Some(vec![
+                            SmolStr::new_static("did"),
+                            SmolStr::new_static("cid"),
+                        ]),
+                        properties: {
+                            #[allow(unused_mut)]
+                            let mut map = BTreeMap::new();
+                            map.insert(
+                                SmolStr::new_static("cid"),
+                                LexXrpcParametersProperty::String(LexString {
+                                    format: Some(LexStringFormat::Cid),
+                                    ..Default::default()
+                                }),
+                            );
+                            map.insert(
+                                SmolStr::new_static("did"),
+                                LexXrpcParametersProperty::String(LexString {
+                                    format: Some(LexStringFormat::Did),
+                                    ..Default::default()
+                                }),
+                            );
+                            map
+                        },
+                        ..Default::default()
+                    })),
                     ..Default::default()
                 }),
             );
@@ -197,7 +190,7 @@ fn lexicon_doc_dev_blooym_porxie_getBlobPolicy() -> LexiconDoc<'static> {
 
 pub mod get_blob_policy_state {
 
-    pub use crate::builder_types::{Set, Unset, IsSet, IsUnset};
+    pub use crate::builder_types::{IsSet, IsUnset, Set, Unset};
     #[allow(unused)]
     use ::core::marker::PhantomData;
     mod sealed {
