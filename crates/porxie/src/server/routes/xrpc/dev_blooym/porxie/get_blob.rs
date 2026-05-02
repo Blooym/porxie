@@ -1,0 +1,22 @@
+use crate::server::{ServerState, routes::get_blob_handler};
+use axum::{
+    extract::{Path, State},
+    response::IntoResponse,
+};
+use jacquard_axum::ExtractXrpc;
+use lexgen::dev_blooym::porxie::get_blob::GetBlobRequest;
+use std::sync::Arc;
+
+/// Compatibility layer that converts the xrpc call into a
+/// regular get blob request. May become the primary method
+/// in the future.
+pub async fn xrpc_compat_get_blob_handler(
+    state: State<Arc<ServerState>>,
+    ExtractXrpc(request): ExtractXrpc<GetBlobRequest>,
+) -> impl IntoResponse {
+    get_blob_handler(
+        Path((request.did.to_string(), request.cid.to_string())),
+        state,
+    )
+    .await
+}

@@ -1,5 +1,5 @@
 target/
 .direnv/
-lexicons/
+__pycache__/
 
 test_server.py

@@ -1,0 +1,56 @@
+{
+  "lexicon": 1,
+  "id": "dev.blooym.porxie.getBlobPolicy",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Returns the policy status of the given actor + blob combination.",
+      "parameters": {
+        "type": "params",
+        "required": [
+          "did",
+          "cid"
+        ],
+        "properties": {
+          "did": {
+            "type": "string",
+            "format": "did"
+          },
+          "cid": {
+            "type": "string",
+            "format": "cid"
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "policy"
+          ],
+          "properties": {
+            "policy": {
+              "type": "union",
+              "closed": true,
+              "refs": [
+                "#allowed",
+                "#forbidden"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "allowed": {
+      "type": "object",
+      "description": "Blob is allowed to be served.",
+      "properties": {}
+    },
+    "forbidden": {
+      "type": "object",
+      "description": "Blob is not allowed to be served.",
+      "properties": {}
+    }
+  }
+}

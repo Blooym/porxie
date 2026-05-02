@@ -1,0 +1,32 @@
+{
+  "lexicon": 1,
+  "id": "dev.blooym.porxie.cache.purgeBlob",
+  "defs": {
+    "main": {
+      "type": "procedure",
+      "description": "Clear all cache entries relating to the specified blob. Requires admin authentication.",
+      "input": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "cid"
+          ],
+          "properties": {
+            "cid": {
+              "type": "string",
+              "format": "cid"
+            }
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    }
+  }
+}

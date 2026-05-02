@@ -1,0 +1,32 @@
+{
+  "lexicon": 1,
+  "id": "dev.blooym.porxie.cache.purgeActor",
+  "defs": {
+    "main": {
+      "type": "procedure",
+      "description": "Clear all cache entries relating to the specified actor. Requires admin authentication.",
+      "input": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "did"
+          ],
+          "properties": {
+            "did": {
+              "type": "string",
+              "format": "did"
+            }
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    }
+  }
+}

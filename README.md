@@ -10,23 +10,23 @@ A correct and efficient ATProto blob proxy for secure content delivery.
 
 ## Features
 
-- Blob validation - verifies blob content matches its CID and rejects invalid/tampered content.
-- Secure serving - blobs are always served with secure headers to help improve end-user security.
-- MIME filtering - detects blob content MIME-types and enforces an optional allowlist of permitted types.
-- Policy enforcement - optionally integrate with an external policy service (like an AppView) to control which blobs can be served.
-- In-memory cache - configurable in-memory caching for fast repeat access with support for manual cache purging via authenticated HTTP DELETE.
-
-## Routes
-
-- [GET] `/{did}/{cid}`: Resolve and fetch a blob from its origin.
-- [DELETE] `/cache/{cid or did}`: Invalidate all valid cache items for a specific blob CID or for an entire user DID. Requires configured bearer auth token.
+- Blob validation: verifies blob content matches its CID and rejects invalid/tampered content.
+- Secure serving: blobs are always served with secure headers to help improve end-user security.
+- MIME filtering:  detects blob content MIME-types and enforces an optional allowlist of permitted types.
+- Policy enforcement: optionally integrate with an external policy service (like an AppView) to control which blobs can be served.
+- In-memory cache: configurable in-memory caching for fast repeat access with support for manual cache purging via authenticated HTTP DELETE.
 
 ## Usage
 
 > [!NOTE]
-> Porxie does not handle TLS, so it should be placed behind a reverse proxy like [Caddy](https://caddyserver.com), [Traefik](https://traefik.io/traefik), or [NGINX](https://nginx.org). Ensure that any intermediaries between Porxie and the client pass through the `Cache-Control`, `Content-Security-Policy` and `Content-Disposition` headers, or otherwise set them securely.
->
-> Putting a CDN in front of Porxie is also recommended for better long-term caching and worldwide latency.
+> Porxie does not handle TLS, so it should be placed behind a reverse proxy like [Caddy](https://caddyserver.com), [Traefik](https://traefik.io/traefik), or [NGINX](https://nginx.org). It is also recommended to use a dedicated caching layer in-between Porxie and your clients such as Varnish, Cloudflare, or similar.
+> 
+> Please ensure that any intermediary services between Porxie and the client pass through the following headers or set them the same as Porxie does:
+> - `Content-Type` (if unmodified by the service)
+> - `Cache-Control`
+> - `Content-Security-Policy` 
+> - `Content-Disposition`
+> - `X-Content-Type-Options`
 
 ### Run: Binary
 
@@ -43,18 +43,6 @@ To run Porxie directly, install [Rust and Cargo](https://rust-lang.org/tools/ins
    ```sh
    porxie
    ```
-
-### Run: Docker
-
-To run Porxie with the Docker CLI and default settings, use the following command:
-
-```sh
-docker run -d \
-  --name porxie \
-  --restart unless-stopped \
-  -p 6314:6314 \
-  blooym/porxie:latest
-```
 
 ### Run: Docker Compose
 
@@ -78,18 +66,21 @@ services:
 
 To run Porxie with Nix, you can use the [package](https://search.nixos.org/packages?channel=unstable&query=porxie) or [NixOS module](https://search.nixos.org/options?channel=unstable&query=porxie) provided directly in nixpkgs.
 
+## Routes
+
+- [GET] `/{did}/{cid}`: Fetch a blob either from cache or origin.
+- [GET] `/xrpc/dev.blooym.porxie.getBlob?did=<did>&cid=<cid>`: XRPC Compatibility alias for the fetch blob endpoint.
+- [POST] `/xrpc/dev.blooym.porxie.cache.purgeActor?did=<did>`: Purge all cached items relating to an actor DID.
+- [POST] `/xrpc/dev.blooym.porxie.cache.purgeBlob?cid=<cid>`: Purge all cache items relating to a blob CID.
+
+
 ## Policy Service
 
 Porxie can optionally check with an external HTTP service before serving any blob. You build and run this service yourself - Porxie just calls it and acts on the response. This is useful for things like content takedowns or blob allow lists.
 
-For every incoming request, Porxie sends `GET <policy-service-url>/<did>/<cid>` and expects one of the following responses:
+For every incoming request, Porxie sends `GET <policy-service-url>/xrpc/dev.blooym.porxie.getBlobPolicy` and expects a response that conforms to the (`lexicon xrpc output`)[lexicons/dev/blooym/porxie/getBlobPolicy.json].
 
-- **200 OK** - the blob is allowed and will be served.
-- **410 Gone** - the blob is restricted and Porxie will refuse to serve it to the client.
-
-Any other status code is treated as an error for now.
-
-Policy decisions are cached per DID+CID pair, so your service won't be hit on every request. To clear a cached decision early, use the `DELETE /cache/{cid}` endpoint.
+Policy decisions are cached per DID+CID pair, so your service won't be hit on every request. The policy cache can be cleared for a blob or actor via the cache clearing xrpc endpoints.
 
 By default, Porxie will fail-closed: if the policy service errors, the blob request fails too. This can be changed to fail-open if preferred.
 
@@ -111,12 +102,14 @@ All options can be set via flags, environment variables, or a `.env` file. For t
     [env: PORXIE_SERVER_ADDRESS=]
     [default: ip:127.0.0.1:6314]
 
---server-auth-token <SA_SERVER_AUTH_TOKEN>
-    Bearer token for authenticating admin requests.
+--server-admin-password <SA_SERVER_ADMIN_PASSWORD>
+    Admin password for authenticating privileged requests.
 
     When unset, all authenticated endpoints will reject requests with HTTP 401.
 
-    [env: PORXIE_SERVER_AUTH_TOKEN=]
+    Authenticated requests always expect the username `admin` as per specification.
+
+    [env: PORXIE_SERVER_ADMIN_TOKEN=]
 ```
 
 ### Blob
@@ -139,9 +132,9 @@ All options can be set via flags, environment variables, or a `.env` file. For t
 
 --blob-max-size <BA_BLOB_MAX_SIZE>
     Maximum blob size that can be fetched and served.
-          
+
     Blobs that exceed this limit will return HTTP 413.
-          
+
     The minimum value is 512kb and the maximum is the system's total memory.
 
     [env: PORXIE_BLOB_MAX_SIZE=]
@@ -155,7 +148,7 @@ All options can be set via flags, environment variables, or a `.env` file. For t
     cleared manually for changes to take effect quickly.
 
     [env: PORXIE_BLOB_CACHE_HEADER=]
-    [default: "public, max-age=604800, must-revalidate, immutable"]
+    [default: "public, max-age=604800, immutable"]
 
 --blob-processing-timeout <BA_BLOB_PROCESSING_TIMEOUT>
     Maximum duration a blob can be processed by this server before aborting
@@ -209,11 +202,11 @@ All options can be set via flags, environment variables, or a `.env` file. For t
 ```
 --cache-allocation <CA_CACHE_ALLOCATION>
     Total memory allocation for the internal cache.
-          
+
     Blobs are cached using an LFU policy. The most frequently requested blobs are kept longest when the cache approaches its limit.
-          
+
     For production deployments, a CDN or caching layer in front of this server is recommended for lower latency and better global availability.
-          
+
     The minimum value is 8mb and the maximum is the system's total memory.
 
     [env: PORXIE_CACHE_ALLOCATION=]
@@ -250,10 +243,7 @@ All options can be set via flags, environment variables, or a `.env` file. For t
 --policy-url <PA_POLICY_URL>
     Policy service URL that DID+CID pairs will be checked against.
 
-    Requests are sent as HTTP GET <url>/<did>/<cid>.
-
-    The service is expected to return HTTP 200 (OK) if permitted or HTTP 410 (GONE) if
-    restricted.
+    Requests are sent via XRPC tp <url>/xrpc/dev.blooym.porxie.getBlobPolicy?did=<did>&cid=<cid>.
 
     [env: PORXIE_POLICY_URL=]
 
@@ -266,17 +256,14 @@ All options can be set via flags, environment variables, or a `.env` file. For t
 
     As pipes are used as a delimiter, they cannot be contained in headers.
 
-    Example (cli): '--policy-request-headers "Authorization: Bearer token"
-    --policy-request-headers "X-Api-Key: your-key"'
+    Example (cli): '--policy-request-headers "X-Hello: world" --policy-request-headers "X-Foo: bar"'
 
-    Example (env): 'PORXIE_POLICY_REQUEST_HEADERS="Authorization: Bearer
-    token|X-Api-Key: your-key"'
+    Example (env): 'PORXIE_POLICY_REQUEST_HEADERS="X-Hello: world|X-Foo: bar"'
 
     [env: PORXIE_POLICY_REQUEST_HEADERS=]
 
 --policy-fail-open
-    Allow requests to proceed if the policy service is unavailable or returns an
-    unexpected status code.
+    Allow requests to proceed if the policy service is unavailable.
 
     Warning: enabling this means restricted blobs may be served when the policy service
     is unreachable.

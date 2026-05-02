@@ -1,0 +1,59 @@
+{
+  "lexicon": 1,
+  "id": "dev.blooym.porxie.getBlob",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Fetch and validate a blob from the origin via the service. May implement caching depending on implementation.",
+      "parameters": {
+        "type": "params",
+        "required": [
+          "did",
+          "cid"
+        ],
+        "properties": {
+          "did": {
+            "type": "string",
+            "format": "did"
+          },
+          "cid": {
+            "type": "string",
+            "format": "cid"
+          }
+        }
+      },
+      "output": {
+        "encoding": "*/*"
+      },
+      "errors": [
+        {
+          "name": "BlobCidMismatch"
+        },
+        {
+          "name": "BlobFetchFailed"
+        },
+        {
+          "name": "BlobForbiddenType"
+        },
+        {
+          "name": "BlobNotFound"
+        },
+        {
+          "name": "BlobTooLarge"
+        },
+        {
+          "name": "CannotResolve"
+        },
+        {
+          "name": "CidUnsupported"
+        },
+        {
+          "name": "InternalServerError"
+        },
+        {
+          "name": "PolicyForbidden"
+        }
+      ]
+    }
+  }
+}
