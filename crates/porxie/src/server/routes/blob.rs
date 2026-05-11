@@ -84,7 +84,7 @@ pub async fn get_blob_handler(
                         [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
                         Json(XrpcErrorResponse {
                             error: "InternalServerError",
-                            message: Some("An internal server error occured."),
+                            message: None,
                         }),
                     ));
                 }
@@ -109,20 +109,13 @@ pub async fn get_blob_handler(
         Ok(blob) => blob,
         Err(err) => {
             return Err(match *err {
-                BlobDownloadError::NotFound => (
-                    StatusCode::NOT_FOUND,
+                // Client.
+                BlobDownloadError::CidUnsupportedMultihash => (
+                    StatusCode::BAD_REQUEST,
                     [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
                     Json(XrpcErrorResponse {
-                        error: "BlobNotFound",
-                        message: Some("Blob not found"),
-                    }),
-                ),
-                BlobDownloadError::TooLarge => (
-                    StatusCode::PAYLOAD_TOO_LARGE,
-                    [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
-                    Json(XrpcErrorResponse {
-                        error: "BlobTooLarge",
-                        message: Some("Blob exceeds maximum allowed size"),
+                        error: "CidUnsupported",
+                        message: Some("Unsupported CID multihash or codec"),
                     }),
                 ),
                 BlobDownloadError::ForbiddenMimeType => (
@@ -133,28 +126,40 @@ pub async fn get_blob_handler(
                         message: Some("Content type is not allowed"),
                     }),
                 ),
+                BlobDownloadError::TooLarge => (
+                    StatusCode::PAYLOAD_TOO_LARGE,
+                    [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
+                    Json(XrpcErrorResponse {
+                        error: "BlobTooLarge",
+                        message: Some("Blob exceeds maximum allowed size"),
+                    }),
+                ),
+
+                // Resolver.
+                BlobDownloadError::BlobResolutionFailure => (
+                    StatusCode::FAILED_DEPENDENCY,
+                    [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
+                    Json(XrpcErrorResponse {
+                        error: "CannotResolve",
+                        message: Some("Failed to resolve source of blob"),
+                    }),
+                ),
+
+                // Origin.
+                BlobDownloadError::NotFound => (
+                    StatusCode::NOT_FOUND,
+                    [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
+                    Json(XrpcErrorResponse {
+                        error: "BlobNotFound",
+                        message: None,
+                    }),
+                ),
                 BlobDownloadError::CidMismatch => (
                     StatusCode::BAD_GATEWAY,
                     [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
                     Json(XrpcErrorResponse {
                         error: "BlobCidMismatch",
-                        message: Some("Blob content does not match CID"),
-                    }),
-                ),
-                BlobDownloadError::CidUnsupportedMultihash => (
-                    StatusCode::NOT_IMPLEMENTED,
-                    [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
-                    Json(XrpcErrorResponse {
-                        error: "CidUnsupported",
-                        message: Some("Unsupported CID multihash"),
-                    }),
-                ),
-                BlobDownloadError::BlobResolutionFailure => (
-                    StatusCode::BAD_GATEWAY,
-                    [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
-                    Json(XrpcErrorResponse {
-                        error: "CannotResolve",
-                        message: Some("Failed to resolve source of blob"),
+                        message: Some("Blob content does failed integrity check (CID Mismatch)"),
                     }),
                 ),
                 BlobDownloadError::FetchFailure
@@ -164,7 +169,7 @@ pub async fn get_blob_handler(
                     [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
                     Json(XrpcErrorResponse {
                         error: "BlobFetchFailed",
-                        message: Some("Failed to fetch blob from origin"),
+                        message: Some("Failed to fetch blob from origin server"),
                     }),
                 ),
             });
@@ -188,20 +193,23 @@ pub async fn get_blob_handler(
         .await
     {
         return Err(match *err {
+            // Resolver.
+            BlobOwnershipError::BlobResolutionFailure => (
+                StatusCode::FAILED_DEPENDENCY,
+                [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
+                Json(XrpcErrorResponse {
+                    error: "CannotResolve",
+                    message: Some("Failed to resolve source of blob"),
+                }),
+            ),
+
+            // Origin.
             BlobOwnershipError::NotFound => (
                 StatusCode::NOT_FOUND,
                 [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
                 Json(XrpcErrorResponse {
                     error: "BlobNotFound",
-                    message: Some("Blob not found"),
-                }),
-            ),
-            BlobOwnershipError::BlobResolutionFailure => (
-                StatusCode::BAD_GATEWAY,
-                [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
-                Json(XrpcErrorResponse {
-                    error: "CannotResolve",
-                    message: Some("Failed to resolve source of blob"),
+                    message: None,
                 }),
             ),
             BlobOwnershipError::ErrorStatusCode | BlobOwnershipError::FetchFailure => (
