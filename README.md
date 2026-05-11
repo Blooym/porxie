@@ -132,7 +132,7 @@ All options can be set via flags, environment variables, or a `.env` file. For t
     [default: image/*]
 
 --blob-max-size <BA_BLOB_MAX_SIZE>
-    Maximum blob size that can be fetched and served.
+    Maximum blob size that can be served.
 
     Blobs that exceed this limit will return HTTP 413.
 

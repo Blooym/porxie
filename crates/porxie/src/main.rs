@@ -107,7 +107,7 @@ struct BlobArgs {
     )]
     allowed_mimetypes: Vec<Mime>,
 
-    /// Maximum blob size that can be fetched and served.
+    /// Maximum blob size that can be served.
     ///
     /// Blobs that exceed this limit will return HTTP 413.
     ///
