@@ -1,9 +1,5 @@
 use crate::{
-    server::{
-        ServerState,
-        extractors::AdminXrpcAuth,
-        routes::{CACHE_CONTROL_NOCACHE_VALUE, XrpcErrorResponse},
-    },
+    server::{ServerState, extractors::AdminXrpcAuth, routes::CACHE_CONTROL_NOCACHE_VALUE},
     types::blob_cid::BlobCid,
 };
 use axum::{
@@ -12,7 +8,8 @@ use axum::{
     http::{HeaderName, header},
 };
 use jacquard_axum::ExtractXrpc;
-use lexgen::dev_blooym::porxie::cache::purge_blob::PurgeBlobRequest;
+use jacquard_common::xrpc::XrpcError;
+use lexgen::dev_blooym::porxie::cache::purge_blob::{PurgeBlobError, PurgeBlobRequest};
 use reqwest::StatusCode;
 use std::sync::Arc;
 
@@ -25,17 +22,14 @@ pub async fn xrpc_cache_purge_blob_handler(
     (
         StatusCode,
         [(HeaderName, &'static str); 1],
-        Json<XrpcErrorResponse>,
+        Json<XrpcError<PurgeBlobError<'static>>>,
     ),
 > {
     let cid = BlobCid::try_from(request.cid.as_str()).map_err(|_| {
         (
             StatusCode::UNPROCESSABLE_ENTITY,
             [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
-            Json(XrpcErrorResponse {
-                error: "MalformedCid",
-                message: Some("Invalid or unprocessable CID"),
-            }),
+            Json(XrpcError::Xrpc(PurgeBlobError::MalformedCid(None))),
         )
     })?;
 
