@@ -10,8 +10,9 @@ use alloc::collections::BTreeMap;
 
 #[allow(unused_imports)]
 use core::marker::PhantomData;
+use jacquard_common::CowStr;
 use jacquard_common::types::string::Cid;
-use jacquard_derive::{IntoStatic, lexicon};
+use jacquard_derive::{IntoStatic, lexicon, open_union};
 use serde::{Serialize, Deserialize};
 
 #[lexicon]
@@ -27,13 +28,50 @@ pub struct PurgeBlob<'a> {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PurgeBlobOutput<'a> {}
+
+#[open_union]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    thiserror::Error,
+    miette::Diagnostic,
+    IntoStatic
+)]
+
+#[serde(tag = "error", content = "message")]
+#[serde(bound(deserialize = "'de: 'a"))]
+pub enum PurgeBlobError<'a> {
+    /// The provided CID was malformed or does not conform to specification.
+    #[serde(rename = "MalformedCid")]
+    MalformedCid(Option<CowStr<'a>>),
+}
+
+impl core::fmt::Display for PurgeBlobError<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::MalformedCid(msg) => {
+                write!(f, "MalformedCid")?;
+                if let Some(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+                Ok(())
+            }
+            Self::Unknown(err) => write!(f, "Unknown error: {:?}", err),
+        }
+    }
+}
+
 /// Response type for dev.blooym.porxie.cache.purgeBlob
 pub struct PurgeBlobResponse;
 impl jacquard_common::xrpc::XrpcResp for PurgeBlobResponse {
     const NSID: &'static str = "dev.blooym.porxie.cache.purgeBlob";
     const ENCODING: &'static str = "application/json";
     type Output<'de> = PurgeBlobOutput<'de>;
-    type Err<'de> = jacquard_common::xrpc::GenericError<'de>;
+    type Err<'de> = PurgeBlobError<'de>;
 }
 
 impl<'a> jacquard_common::xrpc::XrpcRequest for PurgeBlob<'a> {

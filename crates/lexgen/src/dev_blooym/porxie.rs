@@ -5,4 +5,5 @@
 
 pub mod cache;
 pub mod get_blob;
+pub mod get_blob_metadata;
 pub mod get_blob_policy;

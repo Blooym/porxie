@@ -1,10 +1,10 @@
 {
   "lexicon": 1,
-  "id": "dev.blooym.porxie.getBlob",
+  "id": "dev.blooym.porxie.getBlobMetadata",
   "defs": {
     "main": {
       "type": "query",
-      "description": "Fetch and validate a blob from the origin via the service. May implement caching depending on implementation.",
+      "description": "Fetch and calculate a blob's metadata from the origin via the service. May implement caching depending on implementation.",
       "parameters": {
         "type": "params",
         "required": [
@@ -23,16 +23,26 @@
         }
       },
       "output": {
-        "encoding": "*/*"
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "size"
+          ],
+          "properties": {
+            "size": {
+              "type": "integer"
+            },
+            "contentType": {
+              "type": "string"
+            }
+          }
+        }
       },
       "errors": [
         {
           "name": "MalformedCid",
           "description": "The provided CID was malformed or does not conform to specification."
-        },
-        {
-          "name": "MalformedDid",
-          "description": "The provided DID was malformed or does not conform to specification."
         },
         {
           "name": "BlobCidMismatch"

@@ -26,7 +26,13 @@
           "type": "object",
           "properties": {}
         }
-      }
+      },
+      "errors": [
+        {
+          "name": "MalformedCid",
+          "description": "The provided CID was malformed or does not conform to specification."
+        }
+      ]
     }
   }
 }
