@@ -4,7 +4,7 @@
   "defs": {
     "main": {
       "type": "query",
-      "description": "Fetch and calculate a blob's metadata from the origin via the service. May implement caching depending on implementation.",
+      "description": "NOT FINALISED: Fetch and calculate a blob's metadata from the origin via the service. May implement caching depending on implementation.",
       "parameters": {
         "type": "params",
         "required": [
