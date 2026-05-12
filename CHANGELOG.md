@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0] - 2026-05-12
+
+- Added `/xrpc/dev.blooym.porxie.getBlobMetadata` with query parameters `?did=did&cid=cid` that returns format-specific metadata about a blob.
+  - This endpoint shares an internal cache with `/xrpc/dev.blooym.porxie.getBlob` for content, ownership and policy information.
+  - All blobs can return metadata for their MIME type and size.
+  - Images additionally include their calculated aspect ratio (width and height). These are calculated from the image's metadata without decoding, so results may be inaccurate for malformed or tampered images. Not all image types are supported.
+  - Videos additionally include their calculated aspect ratio (width and height) and duration in milliseconds. These are calculated from the video's metadata without decoding, so results may be inaccurate for malformed or tampered videos. Not all video types are supported.
+
 ## [0.2.0] - 2026-05-02
 
 - The configuration flag `--server-auth-token` has been changed to `--server-admin-password`.
