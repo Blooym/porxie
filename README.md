@@ -15,6 +15,7 @@ A correct and efficient ATProtocol blob proxy for secure content delivery.
 - MIME filtering:  detects blob content MIME-types and enforces an optional allowlist of permitted types.
 - Policy enforcement: optionally integrate with an external policy service (like an AppView) to control which blobs can be served.
 - In-memory cache: configurable in-memory caching for fast repeat access with support for manual cache purging.
+- Metadata calculation: fetch metadata about a blob via xrpc without locally downloading the whole blob.
 
 ## Usage
 
@@ -74,6 +75,7 @@ To run Porxie with Nix, you can either use the [package](https://search.nixos.or
 
 - [GET] `/{did}/{cid}`: Fetch a blob either from cache or origin.
 - [GET] `/xrpc/dev.blooym.porxie.getBlob?did=<did>&cid=<cid>`: XRPC Compatibility shim for the fetch blob endpoint.
+- [GET] `/xrpc/dev.blooym.porxie.getBlobMetadata?did=<did>&cid=<cid>`: Fetch a blob and calculate format-specific metadata.
 - [POST] `/xrpc/dev.blooym.porxie.cache.purgeActor?did=<did>`: Purge all cached items relating to an actor DID.
 - [POST] `/xrpc/dev.blooym.porxie.cache.purgeBlob?cid=<cid>`: Purge all cache items relating to a blob CID.
 

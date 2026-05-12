@@ -4,7 +4,6 @@ mod blob_service;
 mod cache;
 mod http;
 mod identity_service;
-mod mime;
 mod policy_client;
 mod server;
 mod types;
@@ -16,12 +15,12 @@ use crate::{
     policy_client::{PolicyClient, PolicyClientOptions},
     server::{PorxieServer, PorxieServerOptions, SocketAddress},
 };
-use ::mime::Mime;
 use axum::http::{HeaderName, HeaderValue};
 use bytesize::ByteSize;
 use clap::{Args, Parser};
 use core::num::NonZeroU64;
 use dotenvy::dotenv;
+use mediautil::deps::mime::Mime;
 use reqwest::Url;
 use tracing_subscriber::EnvFilter;
 

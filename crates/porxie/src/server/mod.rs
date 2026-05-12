@@ -31,7 +31,7 @@ use axum::{
     routing::{any, get, post},
 };
 use core::{num::NonZeroU64, time::Duration};
-use mime::Mime;
+use mediautil::deps::mime::Mime;
 use std::sync::Arc;
 use tower_http::{
     catch_panic::CatchPanicLayer,

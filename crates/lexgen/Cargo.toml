@@ -1,5 +1,6 @@
 [package]
 name = "lexgen"
+license = "AGPL-3.0-or-later"
 version = "0.0.0"
 edition = "2024"
 

@@ -25,10 +25,10 @@ pub fn sniff_mime(buf: &[u8]) -> Mime {
                         .windows(SVG_MARKER.len())
                         .any(|w| w == SVG_MARKER))
             {
-                tracing::debug!("used svg workaround instead of regular inference");
+                log::debug!("used svg workaround instead of regular inference");
                 return mime::IMAGE_SVG;
             }
-            tracing::debug!("infer was unable to determine mimetype, using fallback value");
+            log::debug!("infer was unable to determine mimetype, using fallback value");
             mime::APPLICATION_OCTET_STREAM
         }
     }

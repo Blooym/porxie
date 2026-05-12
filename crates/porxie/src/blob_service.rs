@@ -1,14 +1,14 @@
 use crate::{
     http::{BytesStreamCappedError, PORXIE_USER_AGENT, bytes_stream_capped},
     identity_service::IdentityService,
-    mime::{is_mime_allowed, sniff_mime},
     types::blob_cid::BlobCid,
 };
 use bytes::Bytes;
 use cid::Cid;
 use core::{num::NonZeroU64, time::Duration};
 use jacquard_common::types::did::Did;
-use mime::Mime;
+use mediautil::deps::mime::Mime;
+use mediautil::mime::{is_mime_allowed, sniff_mime};
 use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
 use multihash_codetable::{Code, MultihashDigest};
 use reqwest::{StatusCode, header, header::HeaderValue};

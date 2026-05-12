@@ -40,7 +40,6 @@ clap = { version = "4.5.60", features = [
 dotenvy = { version = "0.15.7", default-features = false }
 futures-util = { version = "0.3.32", default-features = false }
 humantime = { version = "2.3.0", default-features = false }
-infer = { version = "0.19.0", default-features = false, features = ["std"] }
 jacquard-axum = { version = "0.11.0", default-features = false, features = [
     "tracing",
 ] }
@@ -52,7 +51,7 @@ json-subscriber = { version = "0.2.8", default-features = false, features = [
     "env-filter",
 ] }
 lexgen = { path = "../lexgen" }
-mime = { version = "0.3.17", default-features = false }
+mediautil = { path = "../mediautil" }
 moka = { version = "0.12.14", features = [
     "future",
     "logging",

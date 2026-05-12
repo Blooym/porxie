@@ -4,7 +4,7 @@
   "defs": {
     "main": {
       "type": "query",
-      "description": "NOT FINALISED: Fetch and calculate a blob's metadata from the origin via the service. May implement caching depending on implementation.",
+      "description": "Fetch and calculate a blob's metadata from the origin via the service. May implement caching depending on implementation.",
       "parameters": {
         "type": "params",
         "required": [
@@ -35,6 +35,14 @@
             },
             "contentType": {
               "type": "string"
+            },
+            "data": {
+              "type": "union",
+              "closed": false,
+              "refs": [
+                "#imageData",
+                "#videoData"
+              ]
             }
           }
         }
@@ -69,6 +77,52 @@
           "name": "PolicyForbidden"
         }
       ]
+    },
+    "imageData": {
+      "type": "object",
+      "required": [
+        "aspectRatio"
+      ],
+      "properties": {
+        "aspectRatio": {
+          "type": "ref",
+          "ref": "#aspectRatio"
+        }
+      }
+    },
+    "videoData": {
+      "type": "object",
+      "required": [
+        "aspectRatio",
+        "durationMs"
+      ],
+      "properties": {
+        "aspectRatio": {
+          "type": "ref",
+          "ref": "#aspectRatio"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "aspectRatio": {
+      "type": "object",
+      "required": [
+        "width",
+        "height"
+      ],
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
     }
   }
 }

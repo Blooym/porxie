@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/porxie", "crates/lexgen"]
+members = ["crates/porxie", "crates/lexgen", "crates/mediautil"]
 resolver = "3"
 
 [profile.release]

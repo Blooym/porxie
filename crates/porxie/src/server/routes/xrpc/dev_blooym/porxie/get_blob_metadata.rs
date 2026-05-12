@@ -16,7 +16,12 @@ use jacquard_common::{
     xrpc::{GenericXrpcError, XrpcError, XrpcRequest},
 };
 use lexgen::dev_blooym::porxie::get_blob_metadata::{
-    GetBlobMetadata, GetBlobMetadataError, GetBlobMetadataOutput, GetBlobMetadataRequest,
+    AspectRatio, GetBlobMetadata, GetBlobMetadataError, GetBlobMetadataOutput,
+    GetBlobMetadataOutputData, GetBlobMetadataRequest, ImageData, VideoData,
+};
+use mediautil::{
+    deps::mime,
+    metadata::{ImageMetadata, VideoMetadata},
 };
 use std::sync::Arc;
 
@@ -174,13 +179,57 @@ pub async fn xrpc_get_blob_metadata_handler(
         });
     }
 
-    let mime_essence = blob.mime_type.essence_str().to_cowstr().into_static();
+    // Calculate other format-specific attributes.
+    let format_metadata = match blob.mime_type.type_() {
+        mime::IMAGE => tokio::task::spawn_blocking({
+            let bytes = blob.bytes.clone();
+            move || ImageMetadata::from_bytes(&bytes)
+        })
+        .await
+        .inspect_err(|err| tracing::warn!("image metadata task failed: {err:?}"))
+        .ok()
+        .and_then(|r| {
+            r.inspect_err(|err| tracing::debug!("image metadata extraction failed: {err:?}"))
+                .ok()
+        })
+        .map(|attr| {
+            GetBlobMetadataOutputData::ImageData(Box::new(
+                ImageData::new()
+                    .aspect_ratio(
+                        AspectRatio::new()
+                            .height(attr.height as i64) // TODO: Convert safely.
+                            .width(attr.width as i64) // TODO: Convert safely.
+                            .build(),
+                    )
+                    .build(),
+            ))
+        }),
+        mime::VIDEO => VideoMetadata::from_bytes(&blob.bytes)
+            .await
+            .inspect_err(|err| tracing::debug!("video metadata extraction failed: {err:?}"))
+            .ok()
+            .map(|attr| {
+                GetBlobMetadataOutputData::VideoData(Box::new(
+                    VideoData::new()
+                        .aspect_ratio(
+                            AspectRatio::new()
+                                .width(attr.width)
+                                .height(attr.height)
+                                .build(),
+                        )
+                        .duration_ms(attr.length as i64) // TODO: Convert safely.
+                        .build(),
+                ))
+            }),
+        _ => None,
+    };
 
     Ok((
         [(header::CACHE_CONTROL, state.cache_control_header.clone())],
         Json(GetBlobMetadataOutput {
             size: blob.bytes.len() as i64,
-            content_type: Some(mime_essence),
+            content_type: Some(blob.mime_type.essence_str().to_cowstr().into_static()),
+            data: format_metadata,
             extra_data: None,
         }),
     ))
