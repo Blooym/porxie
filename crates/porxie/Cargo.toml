@@ -6,7 +6,7 @@ repository = "https://codeberg.org/Blooym/porxie"
 homepage = "https://codeberg.org/Blooym/porxie/src/branch/main/README.md"
 documentation = "https://codeberg.org/Blooym/porxie/src/branch/main/README.md"
 license = "AGPL-3.0-or-later"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 
 [dependencies]
