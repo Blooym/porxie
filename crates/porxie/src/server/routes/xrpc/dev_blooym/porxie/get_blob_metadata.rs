@@ -217,7 +217,7 @@ pub async fn xrpc_get_blob_metadata_handler(
                                 .height(attr.height)
                                 .build(),
                         )
-                        .duration_ms(attr.length as i64) // TODO: Convert safely.
+                        .duration_ms(attr.duration_ms as i64) // TODO: Convert safely.
                         .build(),
                 ))
             }),

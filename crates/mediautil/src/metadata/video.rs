@@ -1,19 +1,25 @@
 use nom_exif::{AsyncMediaSource, MediaParser, TrackInfoTag};
 use std::io::Cursor;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum VideoMetadataError {
+    #[error(transparent)]
+    Nom(#[from] nom_exif::Error),
+}
 
 pub struct VideoMetadata {
     pub width: u32,
     pub height: u32,
-    pub length: u64,
+    pub duration_ms: u64,
 }
 
 impl VideoMetadata {
-    /// Calculate video metadata from a raw byte array.
+    /// Calculate video metadata from raw bytes.
     ///
     /// ## Safety
-    /// Only the video's metadata tags are read during parsing. The underlying
-    /// video frames are left untouched.
-    pub async fn from_bytes(bytes: &[u8]) -> Result<Self, nom_exif::Error> {
+    /// Only the video's metadata tags are read during parsing.
+    pub async fn from_bytes(bytes: &[u8]) -> Result<Self, VideoMetadataError> {
         let source = AsyncMediaSource::seekable(Cursor::new(bytes)).await?;
         let info = MediaParser::new().parse_track_async(source).await?;
 
@@ -31,10 +37,10 @@ impl VideoMetadata {
             )
         };
 
-        Ok(VideoMetadata {
+        Ok(Self {
             width,
             height,
-            length: duration,
+            duration_ms: duration,
         })
     }
 }
