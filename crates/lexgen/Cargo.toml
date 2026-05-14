@@ -5,7 +5,6 @@ version = "0.0.0"
 edition = "2024"
 
 [features]
-default = ["dev_blooym"]
 dev_blooym = []
 
 [dependencies]

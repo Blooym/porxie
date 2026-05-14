@@ -50,8 +50,13 @@ json-subscriber = { version = "0.2.8", default-features = false, features = [
     "tracing-log",
     "env-filter",
 ] }
-lexgen = { path = "../lexgen" }
-mediautil = { path = "../mediautil" }
+lexgen = { path = "../lexgen", default-features = false, features = [
+    "dev_blooym",
+] }
+mediautil = { path = "../mediautil", default-features = false, features = [
+    "video-metadata",
+    "image-metadata",
+] }
 moka = { version = "0.12.14", features = [
     "future",
     "logging",
