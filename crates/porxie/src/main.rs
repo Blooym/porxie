@@ -20,7 +20,7 @@ use bytesize::ByteSize;
 use clap::{Args, Parser};
 use core::num::NonZeroU64;
 use dotenvy::dotenv;
-use mediautil::deps::mime::Mime;
+use porxie_mediautil::deps::mime::Mime;
 use reqwest::Url;
 use tracing_subscriber::EnvFilter;
 

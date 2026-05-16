@@ -10,10 +10,10 @@ use bytes::Bytes;
 use cid::Cid;
 use core::{num::NonZeroU64, time::Duration};
 use jacquard_common::types::did::Did;
-use mediautil::deps::mime::Mime;
-use mediautil::mime::{is_mime_allowed, sniff_mime};
 use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
 use multihash_codetable::{Code, MultihashDigest};
+use porxie_mediautil::deps::mime::Mime;
+use porxie_mediautil::mime::{is_mime_allowed, sniff_mime};
 use reqwest::{
     StatusCode,
     header::{self, HeaderValue},

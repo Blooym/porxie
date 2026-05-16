@@ -1,7 +1,7 @@
 use crate::server::{ServerState, extractors::AdminXrpcAuth};
 use axum::extract::State;
 use jacquard_axum::ExtractXrpc;
-use lexgen::dev_blooym::porxie::cache::purge_actor::PurgeActorRequest;
+use porxie_lexgen::dev_blooym::porxie::cache::purge_actor::PurgeActorRequest;
 use reqwest::StatusCode;
 use std::sync::Arc;
 

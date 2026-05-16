@@ -2404,18 +2404,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
-name = "lexgen"
-version = "0.0.0"
-dependencies = [
- "jacquard-common",
- "jacquard-derive",
- "jacquard-lexicon",
- "miette",
- "serde",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2564,19 +2552,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ea1f30cedd69f0a2954655f7188c6a834246d2bcf1e315e2ac40c4b24dc9519"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "mediautil"
-version = "0.0.0"
-dependencies = [
- "bytes",
- "image",
- "infer",
- "log",
- "mime",
- "nom-exif",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -3220,10 +3195,10 @@ dependencies = [
  "jacquard-identity",
  "jemallocator",
  "json-subscriber",
- "lexgen",
- "mediautil",
  "moka",
  "multihash-codetable",
+ "porxie-lexgen",
+ "porxie-mediautil",
  "reqwest",
  "serde",
  "serde_json",
@@ -3235,6 +3210,31 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+]
+
+[[package]]
+name = "porxie-lexgen"
+version = "0.0.0"
+dependencies = [
+ "jacquard-common",
+ "jacquard-derive",
+ "jacquard-lexicon",
+ "miette",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "porxie-mediautil"
+version = "0.0.0"
+dependencies = [
+ "bytes",
+ "image",
+ "infer",
+ "log",
+ "mime",
+ "nom-exif",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

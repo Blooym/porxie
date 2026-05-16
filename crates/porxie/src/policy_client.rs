@@ -1,7 +1,9 @@
 use crate::{networking::http::USER_AGENT, types::blob_cid::BlobCid};
 use jacquard_common::types::did::Did;
-use lexgen::dev_blooym::porxie::get_blob_policy::{GetBlobPolicyOutput, GetBlobPolicyOutputPolicy};
 use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
+use porxie_lexgen::dev_blooym::porxie::get_blob_policy::{
+    GetBlobPolicyOutput, GetBlobPolicyOutputPolicy,
+};
 use reqwest::{
     StatusCode, Url,
     header::{HeaderName, HeaderValue},

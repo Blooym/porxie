@@ -50,10 +50,10 @@ json-subscriber = { version = "0.2.8", default-features = false, features = [
     "tracing-log",
     "env-filter",
 ] }
-lexgen = { path = "../lexgen", default-features = false, features = [
+porxie-lexgen = { path = "../porxie-lexgen", default-features = false, features = [
     "dev_blooym",
 ] }
-mediautil = { path = "../mediautil", default-features = false, features = [
+porxie-mediautil = { path = "../porxie-mediautil", default-features = false, features = [
     "video-metadata",
     "image-metadata",
 ] }

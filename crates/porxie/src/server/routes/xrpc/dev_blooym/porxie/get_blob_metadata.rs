@@ -15,11 +15,11 @@ use jacquard_common::{
     cowstr::ToCowStr,
     xrpc::{GenericXrpcError, XrpcError, XrpcRequest},
 };
-use lexgen::dev_blooym::porxie::get_blob_metadata::{
+use porxie_lexgen::dev_blooym::porxie::get_blob_metadata::{
     AspectRatio, GetBlobMetadata, GetBlobMetadataError, GetBlobMetadataOutput,
     GetBlobMetadataOutputData, GetBlobMetadataRequest, ImageData, VideoData,
 };
-use mediautil::{
+use porxie_mediautil::{
     deps::mime,
     metadata::{ImageMetadata, VideoMetadata},
 };

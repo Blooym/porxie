@@ -4,7 +4,7 @@ use axum::{
     response::IntoResponse,
 };
 use jacquard_axum::ExtractXrpc;
-use lexgen::dev_blooym::porxie::get_blob::GetBlobRequest;
+use porxie_lexgen::dev_blooym::porxie::get_blob::GetBlobRequest;
 use std::sync::Arc;
 
 /// Compatibility layer that converts the xrpc call into a

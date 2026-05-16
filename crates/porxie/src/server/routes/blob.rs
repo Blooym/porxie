@@ -15,7 +15,7 @@ use jacquard_common::{
     types::did::Did,
     xrpc::{GenericXrpcError, XrpcError, XrpcRequest},
 };
-use lexgen::dev_blooym::porxie::get_blob::{GetBlob, GetBlobError};
+use porxie_lexgen::dev_blooym::porxie::get_blob::{GetBlob, GetBlobError};
 use std::sync::Arc;
 
 /// Fetch a blob from a given upstream and return it.

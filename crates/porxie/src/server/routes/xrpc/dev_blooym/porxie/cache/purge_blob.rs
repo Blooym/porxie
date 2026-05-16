@@ -9,7 +9,7 @@ use axum::{
 };
 use jacquard_axum::ExtractXrpc;
 use jacquard_common::xrpc::XrpcError;
-use lexgen::dev_blooym::porxie::cache::purge_blob::{PurgeBlobError, PurgeBlobRequest};
+use porxie_lexgen::dev_blooym::porxie::cache::purge_blob::{PurgeBlobError, PurgeBlobRequest};
 use reqwest::StatusCode;
 use std::sync::Arc;
 
