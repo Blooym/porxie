@@ -119,19 +119,18 @@ All options can be set via flags, environment variables, or a `.env` file. For t
 
 ```
 --blob-allowed-mimetypes <BA_BLOB_ALLOWED_MIMETYPES>
-    Blob mimetypes that can be served.
+    Blob mimetypes that can be served. Wildcards are supported "*/*", "image/*", etc.
 
-    Validation is done loosely via content inference. Further validation can be done by a
-    layer above this proxy, such as an image transformation service. When inference fails,
-    the blob's type falls back to `application/octet-stream`. When that type is allowed,
-    blobs failing inference can still be served.
+    Validation is done loosely via content sniffing. Further validation can be done by a layer
+    above this proxy, such as an image transformation service. When inference fails, the blob's
+    type falls back to `application/octet-stream`. When that type is allowed, blobs failing
+    inference can still be served.
 
-    When using the CLI, the flag can be used multiple times. When setting via environment
-    variable, values are comma-separated
-    (e.g. `PORXIE_BLOB_ALLOWED_MIMETYPES="video/*,image/*"`).
+    When using the CLI, the flag can be used multiple times. When setting via environment variable,
+    values are comma-separated (e.g. `PORXIE_BLOB_ALLOWED_MIMETYPES="video/*,image/*"`).
 
     [env: PORXIE_BLOB_ALLOWED_MIMETYPES=]
-    [default: image/*]
+    [default: image/jpeg image/png image/webp image/avif image/gif]
 
 --blob-max-size <BA_BLOB_MAX_SIZE>
     Maximum blob size that can be served.

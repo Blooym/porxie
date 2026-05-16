@@ -88,9 +88,9 @@ struct ServerArgs {
 #[derive(Args)]
 #[command(next_help_heading = "Blob Options")]
 struct BlobArgs {
-    /// Blob mimetypes that can be served.
+    /// Blob mimetypes that can be served. Wildcards are supported "*/*", "image/*", etc.
     ///
-    /// Validation is done loosely via content inference. Further validation can be done by a layer
+    /// Validation is done loosely via content sniffing. Further validation can be done by a layer
     /// above this proxy, such as an image transformation service. When inference fails, the blob's
     /// type falls back to `application/octet-stream`. When that type is allowed, blobs failing
     /// inference can still be served.
@@ -101,7 +101,7 @@ struct BlobArgs {
         id = "BA_BLOB_ALLOWED_MIMETYPES",
         long = "blob-allowed-mimetypes",
         env = "PORXIE_BLOB_ALLOWED_MIMETYPES",
-        default_values = ["image/*"],
+        default_values = ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"],
         value_delimiter = ','
     )]
     allowed_mimetypes: Vec<Mime>,
