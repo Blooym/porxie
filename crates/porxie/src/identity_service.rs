@@ -6,6 +6,7 @@ use jacquard_identity::{
     resolver::{IdentityError, IdentityResolver as _, PlcSource, ResolverOptions},
 };
 use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
+use reqwest::redirect;
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::instrument;
@@ -46,8 +47,8 @@ impl IdentityService {
             resolver: JacquardResolver::new(
                 reqwest::Client::builder()
                     .user_agent(USER_AGENT)
-                    .https_only(!cfg!(debug_assertions))
-                    .redirect(reqwest::redirect::Policy::limited(2))
+                    .https_only(true)
+                    .redirect(redirect::Policy::limited(4))
                     .dns_resolver(Arc::new(SsrfGuardedDnsResolver))
                     .gzip(true)
                     .brotli(true)
