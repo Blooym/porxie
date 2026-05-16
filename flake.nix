@@ -1,10 +1,7 @@
 {
-  description = "Porxie, an ATProtocol blob proxy for secure content delivery";
-
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
   };
-
   outputs =
     { self, nixpkgs, ... }:
     let
@@ -32,17 +29,5 @@
           };
         }
       );
-
-      packages = forAllSystems (
-        system: pkgs: {
-          porxie = pkgs.lib.warn "using the porxie flake directly is deprecated; use porxie from nixpkgs instead" pkgs.porxie;
-          default = pkgs.lib.warn "using the porxie flake directly is deprecated; use porxie from nixpkgs instead" pkgs.porxie;
-        }
-      );
-
-      nixosModules = {
-        porxie = nixpkgs.lib.warn "using the porxie flake directly is deprecated; use porxie from nixpkgs instead" nixpkgs.nixosModules.porxie;
-        default = nixpkgs.lib.warn "using the porxie flake directly is deprecated; use porxie from nixpkgs instead" nixpkgs.nixosModules.porxie;
-      };
     };
 }
