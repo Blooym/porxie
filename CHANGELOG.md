@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1] - 2026-05-16
+
+- Replaced default DNS resolver for blob fetches and identity resolution with a new resolver that will prevent the usage of private IP ranges. This helps to prevent malicious `did:web` addresses and DID documents from requesting blobs on HTTPs-secured internal network domains.
+  - This will prevent intentional usage of domains pointing to internal resources. This is a known breakage as there are not many use cases where this needs to be supported. Feel free to reach out if something you do has broken as a result.
+
+- The usage of raw IPv4 and IPV6 addresses as PDS URLS in DID documents are now explicitly blocked.
+
 ## [0.3.0] - 2026-05-12
 
 - Added `/xrpc/dev.blooym.porxie.getBlobMetadata` with query parameters `?did=did&cid=cid` that returns format-specific metadata about a blob.

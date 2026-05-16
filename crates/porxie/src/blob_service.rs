@@ -17,6 +17,7 @@ use porxie_mediautil::mime::{is_mime_allowed, sniff_mime};
 use reqwest::{
     StatusCode,
     header::{self, HeaderValue},
+    redirect,
 };
 use std::sync::Arc;
 use thiserror::Error;
@@ -132,8 +133,8 @@ impl BlobService {
                 .build(),
             http_client: reqwest::Client::builder()
                 .user_agent(USER_AGENT)
-                .https_only(!cfg!(debug_assertions))
-                .redirect(reqwest::redirect::Policy::limited(3))
+                .https_only(true)
+                .redirect(redirect::Policy::none())
                 .dns_resolver(Arc::new(SsrfGuardedDnsResolver))
                 .gzip(true)
                 .brotli(true)
