@@ -140,7 +140,7 @@ All options can be set via flags, environment variables, or a `.env` file. For t
     The minimum value is 512kb and the maximum is the system's total memory.
 
     [env: PORXIE_BLOB_MAX_SIZE=]
-    [default: 50mb]
+    [default: 25mb]
 
 --blob-cache-header <BA_BLOB_CACHE_HEADER>
     The Cache-Control header value to send alongside blob responses.

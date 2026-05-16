@@ -115,7 +115,7 @@ struct BlobArgs {
         id = "BA_BLOB_MAX_SIZE",
         long = "blob-max-size",
         env = "PORXIE_BLOB_MAX_SIZE",
-        default_value = "50mb",
+        default_value = "25mb",
         value_parser = |v: &str| -> Result<NonZeroU64, String> {
             let size: ByteSize = v.parse().map_err(|e| format!("{e}"))?;
             if size.as_u64() < 512_000 {
