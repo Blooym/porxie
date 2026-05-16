@@ -2,10 +2,14 @@
 
 ## [0.3.1] - 2026-05-16
 
-- Replaced default DNS resolver for blob fetches and identity resolution with a new resolver that will prevent the usage of private IP ranges. This helps to prevent malicious `did:web` addresses and DID documents from requesting blobs on HTTPs-secured internal network domains.
-  - This will prevent intentional usage of domains pointing to internal resources. This is a known breakage as there are not many use cases where this needs to be supported. Feel free to reach out if something you do has broken as a result.
+- Usage of raw IPv4 and IPv6 addresses in `#atproto_pds` services are now explicitly blocked.
 
-- The usage of raw IPv4 and IPV6 addresses as PDS URLS in DID documents are now explicitly blocked.
+- Requests to the endpoint defined in `#atproto_pds` will no longer follow any redirects and will fail instantly if one is provided.
+
+- The redirect limit for identity resolutions has been changed from 2 to 4 to be generally less restrictive.
+
+- Blob fetches and identity resolution will now refuse to use private IP ranges when making requests to prevent malicious actors from proxying requests to the internal network.
+  - HTTPS was already enforced for all blob and identity requests; this change adds an additional guard on top of that.
 
 ## [0.3.0] - 2026-05-12
 
