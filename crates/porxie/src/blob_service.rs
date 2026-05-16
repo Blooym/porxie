@@ -1,6 +1,9 @@
 use crate::{
-    http::{BytesStreamCappedError, PORXIE_USER_AGENT, bytes_stream_capped},
     identity_service::IdentityService,
+    networking::{
+        dns::SsrfGuardedDnsResolver,
+        http::{BytesStreamCappedError, USER_AGENT, bytes_stream_capped},
+    },
     types::blob_cid::BlobCid,
 };
 use bytes::Bytes;
@@ -11,7 +14,10 @@ use mediautil::deps::mime::Mime;
 use mediautil::mime::{is_mime_allowed, sniff_mime};
 use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
 use multihash_codetable::{Code, MultihashDigest};
-use reqwest::{StatusCode, header, header::HeaderValue};
+use reqwest::{
+    StatusCode,
+    header::{self, HeaderValue},
+};
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::instrument;
@@ -125,9 +131,10 @@ impl BlobService {
                 .support_invalidation_closures()
                 .build(),
             http_client: reqwest::Client::builder()
-                .user_agent(PORXIE_USER_AGENT)
+                .user_agent(USER_AGENT)
                 .https_only(!cfg!(debug_assertions))
                 .redirect(reqwest::redirect::Policy::limited(3))
+                .dns_resolver(Arc::new(SsrfGuardedDnsResolver))
                 .gzip(true)
                 .brotli(true)
                 .zstd(true)

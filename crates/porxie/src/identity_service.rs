@@ -1,4 +1,4 @@
-use crate::http::PORXIE_USER_AGENT;
+use crate::networking::{dns::SsrfGuardedDnsResolver, http::USER_AGENT};
 use core::{str::FromStr, time::Duration};
 use jacquard_common::types::did::Did;
 use jacquard_identity::{
@@ -6,10 +6,10 @@ use jacquard_identity::{
     resolver::{IdentityError, IdentityResolver as _, PlcSource, ResolverOptions},
 };
 use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
-use reqwest::Url;
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::instrument;
+use url::Url;
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -45,9 +45,10 @@ impl IdentityService {
         Ok(Self {
             resolver: JacquardResolver::new(
                 reqwest::Client::builder()
-                    .user_agent(PORXIE_USER_AGENT)
+                    .user_agent(USER_AGENT)
                     .https_only(!cfg!(debug_assertions))
                     .redirect(reqwest::redirect::Policy::limited(2))
+                    .dns_resolver(Arc::new(SsrfGuardedDnsResolver))
                     .gzip(true)
                     .brotli(true)
                     .zstd(true)
@@ -85,13 +86,22 @@ impl IdentityService {
 
     /// Resolve the PDS assigned by the given Did.
     ///
-    // Concurrent requests for the same key are coalesced.
+    /// Concurrent requests for the same key are coalesced.
     #[instrument(skip_all, fields(did = %did))]
     pub async fn pds_for_did(&self, did: &Did<'static>) -> Result<Url, Arc<IdentityError>> {
         self.cache
             .try_get_with_by_ref(did, async {
-                let url = self.resolver.pds_for_did(did).await?;
-                Ok(Url::parse(url.as_str()).unwrap())
+                let url = Url::parse(self.resolver.pds_for_did(did).await?.as_str())
+                    .map_err(|_| IdentityError::invalid_doc("Failed to parse PDS URL"))?;
+
+                match url.host() {
+                    // Allow domains.
+                    Some(url::Host::Domain(_)) => Ok(url),
+                    // Reject everything else as invalid.
+                    _ => Err(IdentityError::invalid_doc(
+                        "document contained an invalid or missing PDS endpoint",
+                    )),
+                }
             })
             .await
     }

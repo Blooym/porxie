@@ -1,4 +1,4 @@
-use crate::{http::PORXIE_USER_AGENT, types::blob_cid::BlobCid};
+use crate::{networking::http::USER_AGENT, types::blob_cid::BlobCid};
 use jacquard_common::types::did::Did;
 use lexgen::dev_blooym::porxie::get_blob_policy::{GetBlobPolicyOutput, GetBlobPolicyOutputPolicy};
 use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
@@ -90,7 +90,7 @@ impl PolicyClient {
                 .support_invalidation_closures()
                 .build(),
             http_client: reqwest::Client::builder()
-                .user_agent(PORXIE_USER_AGENT)
+                .user_agent(USER_AGENT)
                 .https_only(false)
                 .redirect(reqwest::redirect::Policy::limited(2))
                 .gzip(true)

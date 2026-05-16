@@ -1,9 +1,11 @@
+//! Provides HTTP networking utilities.
+
 use bytes::Bytes;
 use core::num::NonZeroU64;
 use futures_util::StreamExt;
 use thiserror::Error;
 
-pub const PORXIE_USER_AGENT: &str = concat!(
+pub const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),
     "/",
     env!("CARGO_PKG_VERSION_MAJOR"),

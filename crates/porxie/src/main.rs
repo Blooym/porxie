@@ -2,8 +2,8 @@
 
 mod blob_service;
 mod cache;
-mod http;
 mod identity_service;
+mod networking;
 mod policy_client;
 mod server;
 mod types;
