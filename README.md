@@ -75,7 +75,7 @@ To run Porxie with Nix, you can either use the [package](https://search.nixos.or
 
 - **[GET]** `/{did}/{cid}`: Fetch a blob either from cache or origin.
 - **[GET]** [`/xrpc/dev.blooym.porxie.getBlob?did=<did>&cid=<cid>`:](lexicons/dev/blooym/porxie/getBlob.json) XRPC compatibility shim for the fetch blob endpoint.
-- **[GET]** [`/xrpc/dev.blooym.porxie.getBlobMetadata?did=<did>&cid=<cid>`](lexicons/dev/blooym/porxie/getBlobMetadata.json.json): Fetch a blob and calculate format-specific metadata.
+- **[GET]** [`/xrpc/dev.blooym.porxie.getBlobMetadata?did=<did>&cid=<cid>`](lexicons/dev/blooym/porxie/getBlobMetadata.json): Fetch a blob and calculate format-specific metadata.
 - **[POST]** [`/xrpc/dev.blooym.porxie.cache.purgeActor?did=<did>`](lexicons/dev/blooym/porxie/cache/purgeActor.json): Purge all cached items relating to an actor DID. *(Requires Authentication)*
 - **[POST]** [`/xrpc/dev.blooym.porxie.cache.purgeBlob?cid=<cid>`](lexicons/dev/blooym/porxie/cache/purgeBlob.json): Purge all cache items relating to a blob CID. *(Requires Authentication)*
 - **[POST]** [`/xrpc/dev.blooym.porxie.cache.purgeAll`](lexicons/dev/blooym/porxie/cache/purgeAll.json): Purge all cache items. *(Requires Authentication)*
