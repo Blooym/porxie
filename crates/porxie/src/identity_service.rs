@@ -6,7 +6,8 @@ use jacquard_identity::{
     resolver::{IdentityError, IdentityResolver as _, PlcSource, ResolverOptions},
 };
 use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
-use reqwest::redirect;
+use porxie_mediautil::deps::mime;
+use reqwest::{header, header::HeaderMap, header::HeaderValue, redirect};
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::instrument;
@@ -39,11 +40,22 @@ impl IdentityService {
     /// Create a new identity service.
     pub fn new(options: IdentityServiceOptions) -> Result<Self, CreateIdentityServiceError> {
         tracing::debug!("creating identity service with options: {options:?}");
+
+        let default_headers = {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                header::ACCEPT,
+                HeaderValue::from_static(mime::APPLICATION_JSON.essence_str()),
+            );
+            headers
+        };
+
         Ok(Self {
             resolver: JacquardResolver::new(
                 reqwest::Client::builder()
                     .brotli(true)
                     .connect_timeout(Duration::from_secs(5))
+                    .default_headers(default_headers)
                     .deflate(true)
                     .dns_resolver(Arc::new(SsrfGuardedDnsResolver))
                     .gzip(true)

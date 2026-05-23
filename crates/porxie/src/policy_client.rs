@@ -4,9 +4,10 @@ use moka::{future::Cache as MokaCache, policy::EvictionPolicy};
 use porxie_lexgen::dev_blooym::porxie::get_blob_policy::{
     GetBlobPolicyOutput, GetBlobPolicyOutputPolicy,
 };
+use porxie_mediautil::deps::mime;
 use reqwest::{
     StatusCode, Url,
-    header::{HeaderName, HeaderValue},
+    header::{self, HeaderMap, HeaderName, HeaderValue},
 };
 use std::{sync::Arc, time::Duration};
 use thiserror::Error;
@@ -74,6 +75,16 @@ impl PolicyClient {
     /// Create a new policy client.
     pub fn new(options: PolicyClientOptions) -> Result<Self, CreatePolicyClientError> {
         tracing::debug!("creating policy service client with options: {options:?}");
+
+        let default_headers = {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                header::ACCEPT,
+                HeaderValue::from_static(mime::APPLICATION_JSON.essence_str()),
+            );
+            headers
+        };
+
         Ok(Self {
             cache: MokaCache::<(Did<'static>, BlobCid), PolicyDecision>::builder()
                 .name("policy")
@@ -90,6 +101,7 @@ impl PolicyClient {
             http_client: reqwest::Client::builder()
                 .brotli(true)
                 .connect_timeout(Duration::from_secs(5))
+                .default_headers(default_headers)
                 .deflate(true)
                 .gzip(true)
                 .https_only(false)

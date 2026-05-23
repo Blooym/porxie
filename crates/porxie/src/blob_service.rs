@@ -127,7 +127,7 @@ impl BlobService {
                         .collect::<Vec<_>>()
                         .join(", "),
                 )
-                .unwrap(),
+                .expect("mime header values should always parse correctly"),
             );
             headers
         };
@@ -155,6 +155,7 @@ impl BlobService {
             http_client: reqwest::Client::builder()
                 .brotli(true)
                 .connect_timeout(Duration::from_secs(5))
+                .default_headers(default_headers)
                 .deflate(true)
                 .dns_resolver(Arc::new(SsrfGuardedDnsResolver))
                 .gzip(true)
@@ -162,7 +163,6 @@ impl BlobService {
                 .redirect(redirect::Policy::limited(3))
                 .timeout(options.http_timeout)
                 .user_agent(USER_AGENT)
-                .default_headers(default_headers)
                 .zstd(true)
                 .build()
                 .map_err(CreateBlobServiceError::HttpClient)?,
