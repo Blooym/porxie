@@ -92,24 +92,46 @@ pub enum BlobUrlResolver<'a> {
     },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct BlobServiceOptions {
+    pub allowed_mimetypes: Vec<Mime>,
     pub data_cache_max_capacity: u64,
     pub data_cache_tti: Duration,
+    pub http_timeout: Duration,
+    pub max_blob_size: NonZeroU64,
     pub ownership_cache_max_capacity: u64,
     pub ownership_cache_ttl: Duration,
-    pub http_timeout: Duration,
 }
 
 pub struct BlobService {
+    allowed_mimetypes: Vec<Mime>,
     data_cache: MokaCache<BlobCid, BlobData>,
-    ownership_cache: MokaCache<(BlobCid, Did<'static>), ()>,
     http_client: reqwest::Client,
+    max_blob_size: NonZeroU64,
+    ownership_cache: MokaCache<(BlobCid, Did<'static>), ()>,
 }
 
 impl BlobService {
     pub fn new(options: BlobServiceOptions) -> Result<Self, CreateBlobServiceError> {
         tracing::debug!("creating blob service with options: {options:?}");
+
+        let default_headers = {
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert(
+                header::ACCEPT,
+                HeaderValue::from_str(
+                    &options
+                        .allowed_mimetypes
+                        .iter()
+                        .map(|m| m.essence_str())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )
+                .unwrap(),
+            );
+            headers
+        };
+
         Ok(Self {
             data_cache: MokaCache::<BlobCid, BlobData>::builder()
                 .name("blob-content")
@@ -140,9 +162,12 @@ impl BlobService {
                 .redirect(redirect::Policy::limited(3))
                 .timeout(options.http_timeout)
                 .user_agent(USER_AGENT)
+                .default_headers(default_headers)
                 .zstd(true)
                 .build()
                 .map_err(CreateBlobServiceError::HttpClient)?,
+            allowed_mimetypes: options.allowed_mimetypes,
+            max_blob_size: options.max_blob_size,
         })
     }
 
@@ -157,8 +182,6 @@ impl BlobService {
         did: &Did<'static>,
         cid: &BlobCid,
         url_resolver: BlobUrlResolver<'_>,
-        max_blob_size: NonZeroU64,
-        allowed_mimetypes: &[Mime],
     ) -> Result<BlobData, Arc<BlobDownloadError>> {
         tracing::debug!("fetching blob from origin");
 
@@ -202,18 +225,21 @@ impl BlobService {
 
                     // Download bytes as a stream, enforcing a max size limit
                     // and aborting if it's crossed.
-                    let bytes = bytes_stream_capped(response, max_blob_size).await.map_err(
-                        |err| match err {
+                    let bytes = bytes_stream_capped(response, self.max_blob_size)
+                        .await
+                        .map_err(|err| match err {
                             BytesStreamCappedError::TooLarge => {
-                                tracing::debug!("blob exceeds max size of {} bytes", max_blob_size);
+                                tracing::debug!(
+                                    "blob exceeds max size of {} bytes",
+                                    self.max_blob_size
+                                );
                                 BlobDownloadError::TooLarge
                             }
                             BytesStreamCappedError::ClientError(err) => {
                                 tracing::warn!("error reading blob stream: {err:?}");
                                 BlobDownloadError::StreamFailed
                             }
-                        },
-                    )?;
+                        })?;
 
                     // Verify request CID matches the blob's computed CID.
                     //
@@ -256,7 +282,7 @@ impl BlobService {
                 // TODO: Merge this with the download stream process to reject bad MIMEs
                 // early?
                 let mime_type = sniff_mime(&bytes);
-                if !is_mime_allowed(&mime_type, allowed_mimetypes) {
+                if !is_mime_allowed(&mime_type, &self.allowed_mimetypes) {
                     tracing::debug!("blob was inferred to be a disallowed mime type: {mime_type}");
                     return Err(BlobDownloadError::ForbiddenMimeType);
                 }

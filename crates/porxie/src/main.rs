@@ -326,18 +326,16 @@ async fn main() -> anyhow::Result<()> {
             })
             .transpose()?,
         blob_service: BlobService::new(BlobServiceOptions {
-            http_timeout: args.blob.http_timeout.into(),
+            allowed_mimetypes: args.blob.allowed_mimetypes.into(),
             data_cache_max_capacity: cache_sizes.blob,
             data_cache_tti: args.cache.blob_tti.into(),
+            http_timeout: args.blob.http_timeout.into(),
+            max_blob_size: args.blob.max_size,
             ownership_cache_max_capacity: cache_sizes.ownership,
             ownership_cache_ttl: args.cache.ownership_ttl.into(),
         })?,
-
         admin_password: args.server.admin_password,
-        allowed_mimetypes: args.blob.allowed_mimetypes,
-        max_blob_size: args.blob.max_size,
         cache_control_header: args.blob.cache_header,
-
         policy_fail_open: args.policy.fail_open,
     });
 

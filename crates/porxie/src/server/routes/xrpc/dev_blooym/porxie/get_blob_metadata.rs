@@ -89,8 +89,6 @@ pub async fn xrpc_get_blob_metadata_handler(
             BlobUrlResolver::Pds {
                 identity_service: &state.identity_service,
             },
-            state.max_blob_size,
-            &state.allowed_mimetypes,
         )
         .await
     {

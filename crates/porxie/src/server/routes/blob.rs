@@ -96,8 +96,6 @@ pub async fn get_blob_handler(
             BlobUrlResolver::Pds {
                 identity_service: &state.identity_service,
             },
-            state.max_blob_size,
-            &state.allowed_mimetypes,
         )
         .await
     {

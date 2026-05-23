@@ -31,8 +31,8 @@ pub struct IdentityServiceOptions {
 }
 
 pub struct IdentityService {
-    resolver: JacquardResolver,
     cache: MokaCache<Did<'static>, Url>,
+    resolver: JacquardResolver,
 }
 
 impl IdentityService {

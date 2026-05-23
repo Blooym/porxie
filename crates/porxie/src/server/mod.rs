@@ -33,8 +33,7 @@ use axum::{
     middleware::{self as axum_middleware},
     routing::{any, get, post},
 };
-use core::{num::NonZeroU64, time::Duration};
-use porxie_mediautil::deps::mime::Mime;
+use core::time::Duration;
 use std::sync::Arc;
 use tower_http::{
     catch_panic::CatchPanicLayer,
@@ -47,23 +46,19 @@ use tracing::Level;
 
 struct ServerState {
     admin_password: Option<String>,
-    allowed_mimetypes: Vec<Mime>,
     blob_service: BlobService,
     cache_control_header: HeaderValue,
     identity_service: IdentityService,
-    max_blob_size: NonZeroU64,
     policy_client: Option<PolicyClient>,
     policy_fail_open: bool,
 }
 
 pub struct PorxieServerOptions {
     pub admin_password: Option<String>,
-    pub allowed_mimetypes: Vec<Mime>,
     pub blob_processing_timeout: Duration,
     pub blob_service: BlobService,
     pub cache_control_header: HeaderValue,
     pub identity_service: IdentityService,
-    pub max_blob_size: NonZeroU64,
     pub policy_client: Option<PolicyClient>,
     pub policy_fail_open: bool,
 }
@@ -132,11 +127,9 @@ impl PorxieServer {
             )
             .with_state(Arc::new(ServerState {
                 admin_password: options.admin_password,
-                allowed_mimetypes: options.allowed_mimetypes,
                 blob_service: options.blob_service,
                 cache_control_header: options.cache_control_header,
                 identity_service: options.identity_service,
-                max_blob_size: options.max_blob_size,
                 policy_client: options.policy_client,
                 policy_fail_open: options.policy_fail_open,
             }));
