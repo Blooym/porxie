@@ -1,5 +1,9 @@
 # Changelog
 
+## [unreleased]
+
+- All blob fetch requests will now contain the HTTP `Accept` header containing the configured allowed mimetypes.
+
 ## [0.3.2] - 2026-05-23
 
 - Requests to PDS endpoints under `#atproto_pds` now follow a maximum of 3 redirects
