@@ -12,17 +12,17 @@ A correct and efficient ATProtocol blob proxy for secure content delivery.
 
 - Blob validation: verifies blob content matches its CID and rejects invalid/tampered content.
 - Secure serving: blobs are always served with secure headers to help improve end-user security.
-- MIME filtering:  detects blob content MIME-types and enforces an optional allowlist of permitted types.
-- Policy enforcement: optionally integrate with an external policy service (like an AppView) to control which blobs can be served.
-- In-memory cache: configurable in-memory caching for fast repeat access with support for manual cache purging.
-- Metadata calculation: fetch metadata about a blob via xrpc without locally downloading the whole blob.
+- MIME filtering: detects blob content MIME-types and enforces an allowlist of permitted types.
+- Policy enforcement: can integrate with an [external policy service](#policy-service) to control which blobs can be served.
+- Smart caching: configurable in-memory caching for fast repeat access with support for manual cache purging.
+- Metadata calculation: remotely calculate metadata about blob content such as dimensions, sizing and more.
 
 ## Usage
 
 > [!NOTE]
 > Porxie does not handle TLS, so it should be placed behind a reverse proxy like [Caddy](https://caddyserver.com), [Traefik](https://traefik.io/traefik), or [NGINX](https://nginx.org). It is also recommended to use a dedicated caching layer in-between Porxie and your clients such as Varnish, Cloudflare, or similar.
 > 
-> Please ensure that any intermediary services between Porxie and the client pass through the following headers or set them the same as Porxie does:
+> Please ensure that any intermediary services between Porxie and the client either pass through the following headers or set them the same as Porxie does:
 > - `Content-Type` (if unmodified by the service)
 > - `Cache-Control`
 > - `Content-Security-Policy` 
@@ -33,7 +33,7 @@ A correct and efficient ATProtocol blob proxy for secure content delivery.
 
 To run Porxie as a binary, you'll first need to install it locally.
 
-As Porxie is not packaged or pre-built in many places yet, the easiest way to do this is building it via Cargo directly. Ensure you have a relatively up to date version of [Rust and Cargo](https://rust-lang.org/tools/install/) installed before following these steps:
+As Porxie has not been packaged in many places yet, the easiest way to do this is building it via Cargo. Ensure you have a relatively up to date version of [Rust and Cargo](https://rust-lang.org/tools/install/) installed before following these steps:
 
 1. Install the binary, replacing v0.0.0 with the version you want to install:
 
@@ -73,19 +73,19 @@ To run Porxie with Nix, you can either use the [package](https://search.nixos.or
 
 ## Routes
 
-- [GET] `/{did}/{cid}`: Fetch a blob either from cache or origin.
-- [GET] `/xrpc/dev.blooym.porxie.getBlob?did=<did>&cid=<cid>`: XRPC Compatibility shim for the fetch blob endpoint.
-- [GET] `/xrpc/dev.blooym.porxie.getBlobMetadata?did=<did>&cid=<cid>`: Fetch a blob and calculate format-specific metadata.
-- [POST] `/xrpc/dev.blooym.porxie.cache.purgeActor?did=<did>`: Purge all cached items relating to an actor DID.
-- [POST] `/xrpc/dev.blooym.porxie.cache.purgeBlob?cid=<cid>`: Purge all cache items relating to a blob CID.
+- **[GET]** `/{did}/{cid}`: Fetch a blob either from cache or origin.
+- **[GET]** `/xrpc/dev.blooym.porxie.getBlob?did=<did>&cid=<cid>`: XRPC compatibility shim for the fetch blob endpoint.
+- **[GET]** `/xrpc/dev.blooym.porxie.getBlobMetadata?did=<did>&cid=<cid>`: Fetch a blob and calculate format-specific metadata.
+- **[POST]** `/xrpc/dev.blooym.porxie.cache.purgeActor?did=<did>`: Purge all cached items relating to an actor DID. *(Requires Authentication)*
+- **[POST]** `/xrpc/dev.blooym.porxie.cache.purgeBlob?cid=<cid>`: Purge all cache items relating to a blob CID. *(Requires Authentication)*
 
 ## Policy Service
 
 Porxie can check with an external HTTP "policy" service before serving blobs, which is useful for moderating content or only serving specific content. You build and run this service yourself - Porxie just sends requests to an XRPC endpoint at [`/xrpc/dev.blooym.porxie.getBlobPolicy`](lexicons/dev/blooym/porxie/getBlobPolicy.json) and acts on the response accordingly.
 
-Policy decisions will be cached using the request DID+CID by default to reduce load on the policy service. The duration items are cached can be configured, and the cache can be cleared manually for a blob or actor via the relevant endpoint.
+Policy decisions will be cached using the request DID+CID by default to reduce load on the policy service. The duration that items are cached for can be configured, and the cache can be cleared manually for a blob or actor via the relevant endpoint.
 
-By default, Porxie will fail-closed: if the policy service returns an error is otherwise unavailable, the blob request will fail too. This behaviour can be configured to fail-open if availability is more important than applying policies.
+By default, Porxie will fail-closed: if the policy service returns an error or is otherwise unavailable, the blob request will fail too. This behaviour can be configured to fail-open if availability is more important than applying policies.
 
 See the [Configuration](#configuration) section for all available policy options.
 
@@ -106,11 +106,11 @@ All options can be set via flags, environment variables, or a `.env` file. For t
     [default: ip:127.0.0.1:6314]
 
 --server-admin-password <SA_SERVER_ADMIN_PASSWORD>
-    Admin password for authenticating priviledged requests.
-
-    When unset, all authenticated endpoints will reject requests with HTTP 401.
+    Admin password for authenticating privileged requests.
 
     Authenticated requests always expect the username `admin` as per specification.
+
+    When not set, authenticated endpoints will be unavailable.
 
     [env: PORXIE_SERVER_ADMIN_PASSWORD=]
 ```
@@ -135,9 +135,7 @@ All options can be set via flags, environment variables, or a `.env` file. For t
 --blob-max-size <BA_BLOB_MAX_SIZE>
     Maximum blob size that can be served.
 
-    Blobs that exceed this limit will return HTTP 413.
-
-    The minimum value is 512kb and the maximum is the system's total memory.
+    This value cannot be set higher than the system's total memory.
 
     [env: PORXIE_BLOB_MAX_SIZE=]
     [default: 25mb]
@@ -146,31 +144,22 @@ All options can be set via flags, environment variables, or a `.env` file. For t
     The Cache-Control header value to send alongside blob responses.
 
     This does not affect internal cache lifetimes, only how downstream clients such as CDNs
-    and browsers are instructed to cache responses. Intermediary caches may need to be
-    cleared manually for changes to take effect quickly.
+    and browsers are instructed to cache responses.
 
     [env: PORXIE_BLOB_CACHE_HEADER=]
     [default: "public, max-age=604800, immutable"]
 
 --blob-processing-timeout <BA_BLOB_PROCESSING_TIMEOUT>
-    Maximum duration a blob can be processed by this server before aborting
+    Maximum duration a blob can be processed by this server before aborting.
 
     [env: PORXIE_BLOB_PROCESSING_TIMEOUT=]
     [default: 1m]
 
 --blob-http-timeout <BA_BLOB_FETCH_TIMEOUT>
-    Maximum duration before blob fetch requests are timed out
+    Maximum duration before blob fetch requests are timed out.
 
     [env: PORXIE_BLOB_HTTP_TIMEOUT=]
     [default: 30s]
-
---blob-http-connect-timeout <BA_BLOB_FETCH_CONNECT_TIMEOUT>
-    Maximum duration before an attempted connection to a blob upstream is aborted.
-
-    This value should be lower than --blob-http-timeout.
-
-    [env: PORXIE_BLOB_HTTP_CONNECT_TIMEOUT=]
-    [default: 10s]
 ```
 
 ### Identity
@@ -179,24 +168,8 @@ All options can be set via flags, environment variables, or a `.env` file. For t
 --identity-plc-url <IA_PLC_URL>
     URL of the PLC instance used for `did:plc` lookups.
 
-    Can typically be left as default unless using a custom or local development setup.
-
     [env: PORXIE_IDENTITY_PLC_URL=]
     [default: https://plc.directory]
-
---identity-http-timeout <IA_IDENTITY_HTTP_TIMEOUT>
-    Maximum duration before identity resolution requests are timed out
-
-    [env: PORXIE_IDENTITY_HTTP_TIMEOUT=]
-    [default: 10s]
-
---identity-http-connect-timeout <IA_IDENTITY_HTTP_CONNECT_TIMEOUT>
-    Maximum duration before a connection attempt to an identity upstream is aborted.
-
-    This value should be lower than --identity-http-timeout.
-
-    [env: PORXIE_IDENTITY_HTTP_CONNECT_TIMEOUT=]
-    [default: 8s]
 ```
 
 ### Cache
@@ -205,7 +178,7 @@ All options can be set via flags, environment variables, or a `.env` file. For t
 --cache-allocation <CA_CACHE_ALLOCATION>
     Total memory allocation for the internal cache.
 
-    Blobs are cached using an LFU policy. The most frequently requested blobs are kept longest when the cache approaches its limit.
+    Blobs are cached using an LFU policy. The most frequently requested blobs are kept longest when the cache reaches maximum size.
 
     For production deployments, a CDN or caching layer in front of this server is recommended for lower latency and better global availability.
 
@@ -215,25 +188,25 @@ All options can be set via flags, environment variables, or a `.env` file. For t
     [default: 512mb]
 
 --cache-blob-tti <CA_CACHE_BLOB_TTI>
-    How long blobs can be idle in the cache before expiring
+    How long blobs can be idle in the cache before expiring.
 
     [env: PORXIE_CACHE_BLOB_TTI=]
     [default: 7days]
 
 --cache-ownership-ttl <CA_CACHE_OWNERSHIP_TTL>
-    How long blob ownership can be cached before expiring
+    How long blob ownership can be cached before expiring.
 
     [env: PORXIE_CACHE_OWNERSHIP_TTL=]
     [default: 1day]
 
 --cache-policy-ttl <CA_CACHE_POLICY_TTL>
-    How long policy decisions can be cached before expiring
+    How long policy decisions can be cached before expiring.
 
     [env: PORXIE_CACHE_POLICY_TTL=]
     [default: 1h]
 
 --cache-identity-ttl <CA_CACHE_IDENTITY_TTL>
-    How long identity lookups (DID resolution, etc) can be cached before expiring
+    How long identity lookups (DID resolution, etc.) can be cached before expiring.
 
     [env: PORXIE_CACHE_IDENTITY_TTL=]
     [default: 1h]
@@ -245,12 +218,12 @@ All options can be set via flags, environment variables, or a `.env` file. For t
 --policy-url <PA_POLICY_URL>
     Policy service URL that DID+CID pairs will be checked against.
 
-    Requests are sent via XRPC tp <url>/xrpc/dev.blooym.porxie.getBlobPolicy?did=<did>&cid=<cid>.
+    Requests are sent via XRPC to <url>/xrpc/dev.blooym.porxie.getBlobPolicy.
 
     [env: PORXIE_POLICY_URL=]
 
 --policy-request-headers <PA_POLICY_REQ_HEADERS>
-    Headers sent alongside all requests to the policy service.
+    Headers sent alongside requests to the policy service.
 
     Each header must be in the format "Name: value". When using the CLI, the flag can be
     used multiple times. When setting via environment variable, headers are
@@ -258,33 +231,19 @@ All options can be set via flags, environment variables, or a `.env` file. For t
 
     As pipes are used as a delimiter, they cannot be contained in headers.
 
-    Example (cli): '--policy-request-headers "X-Hello: world" --policy-request-headers "X-Foo: bar"'
+    Example (CLI): '--policy-request-headers "X-Hello: world" --policy-request-headers "X-Foo: bar"'
 
-    Example (env): 'PORXIE_POLICY_REQUEST_HEADERS="X-Hello: world|X-Foo: bar"'
+    Example (ENV): 'PORXIE_POLICY_REQUEST_HEADERS="X-Hello: world|X-Foo: bar"'
 
     [env: PORXIE_POLICY_REQUEST_HEADERS=]
 
 --policy-fail-open
-    Allow requests to proceed if the policy service is unavailable.
+    Allow requests to proceed even if the policy service is unavailable.
 
     Warning: enabling this means restricted blobs may be served when the policy service
-    is unreachable.
+    is unavailable.
 
     [env: PORXIE_POLICY_FAIL_OPEN=]
-
---policy-http-timeout <PA_POLICY_HTTP_TIMEOUT>
-    Maximum duration before policy service requests are timed out
-
-    [env: PORXIE_POLICY_HTTP_TIMEOUT=]
-    [default: 30s]
-
---policy-http-connect-timeout <PA_POLICY_HTTP_CONNECT_TIMEOUT>
-    Maximum duration before an attempted connection to the policy service is aborted.
-
-    This value should be lower than --policy-http-timeout.
-
-    [env: PORXIE_POLICY_HTTP_CONNECT_TIMEOUT=]
-    [default: 10s]
 ```
 
 ## Examples
@@ -334,7 +293,7 @@ services:
 
 #### Replicating cdn.bsky.app
 
-Bluesky's CDN typically serves images using URLs like `https://cdn.bsky.app/img/{preset}/plain/{did}/{cid}`. By configuring imgproxy with presets and enabling preset-only mode, you can create a compatiable service. The presets below are based on what Bluesky used at the time of writing and may not be up-to-date.
+Bluesky's CDN typically serves images using URLs like `https://cdn.bsky.app/img/{preset}/plain/{did}/{cid}`. By configuring imgproxy with presets and enabling preset-only mode, you can create a compatible service. The presets below are based on what Bluesky used at the time of writing and may not be up-to-date.
 
 ```yaml
 IMGPROXY_PRESETS: >-

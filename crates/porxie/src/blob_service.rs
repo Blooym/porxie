@@ -99,7 +99,6 @@ pub struct BlobServiceOptions {
     pub ownership_cache_max_capacity: u64,
     pub ownership_cache_ttl: Duration,
     pub http_timeout: Duration,
-    pub http_connect_timeout: Duration,
 }
 
 pub struct BlobService {
@@ -114,34 +113,34 @@ impl BlobService {
         Ok(Self {
             data_cache: MokaCache::<BlobCid, BlobData>::builder()
                 .name("blob-content")
-                .weigher(|_key, value| value.bytes.len().try_into().unwrap_or(u32::MAX))
                 .eviction_policy(EvictionPolicy::tiny_lfu())
                 .max_capacity(options.data_cache_max_capacity)
                 .time_to_idle(options.data_cache_tti)
+                .weigher(|_key, value| value.bytes.len().try_into().unwrap_or(u32::MAX))
                 .build(),
             ownership_cache: MokaCache::<(BlobCid, Did<'static>), ()>::builder()
                 .name("blob-ownership")
+                .eviction_policy(EvictionPolicy::tiny_lfu())
+                .max_capacity(options.ownership_cache_max_capacity)
+                .support_invalidation_closures()
+                .time_to_live(options.ownership_cache_ttl)
                 .weigher(|key, _value| {
                     (key.0.encoded_len() + key.1.len())
                         .try_into()
                         .unwrap_or(u32::MAX)
                 })
-                .eviction_policy(EvictionPolicy::tiny_lfu())
-                .max_capacity(options.ownership_cache_max_capacity)
-                .time_to_live(options.ownership_cache_ttl)
-                .support_invalidation_closures()
                 .build(),
             http_client: reqwest::Client::builder()
-                .user_agent(USER_AGENT)
-                .https_only(true)
-                .redirect(redirect::Policy::none())
+                .brotli(true)
+                .connect_timeout(Duration::from_secs(5))
+                .deflate(true)
                 .dns_resolver(Arc::new(SsrfGuardedDnsResolver))
                 .gzip(true)
-                .brotli(true)
-                .zstd(true)
-                .deflate(true)
-                .connect_timeout(options.http_connect_timeout)
+                .https_only(true)
+                .redirect(redirect::Policy::limited(3))
                 .timeout(options.http_timeout)
+                .user_agent(USER_AGENT)
+                .zstd(true)
                 .build()
                 .map_err(CreateBlobServiceError::HttpClient)?,
         })

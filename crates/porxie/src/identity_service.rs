@@ -26,10 +26,6 @@ pub struct IdentityServiceOptions {
     pub cache_memory_allocation: u64,
     /// Time-to-live duration of items in the cache.
     pub cache_ttl: Duration,
-    /// HTTP timeout to apply to all identity fetches.
-    pub http_timeout: Duration,
-    /// HTTP connection-phase timeout to apply to all identity requests.
-    pub http_connect_timeout: Duration,
     /// URL to the PLC directory to query for `did:plc` requests.
     pub plc_directory_url: Url,
 }
@@ -46,16 +42,16 @@ impl IdentityService {
         Ok(Self {
             resolver: JacquardResolver::new(
                 reqwest::Client::builder()
-                    .user_agent(USER_AGENT)
-                    .https_only(true)
-                    .redirect(redirect::Policy::limited(4))
+                    .brotli(true)
+                    .connect_timeout(Duration::from_secs(5))
+                    .deflate(true)
                     .dns_resolver(Arc::new(SsrfGuardedDnsResolver))
                     .gzip(true)
-                    .brotli(true)
+                    .https_only(true)
+                    .redirect(redirect::Policy::limited(3))
+                    .timeout(Duration::from_secs(10))
+                    .user_agent(USER_AGENT)
                     .zstd(true)
-                    .deflate(true)
-                    .connect_timeout(options.http_connect_timeout)
-                    .timeout(options.http_timeout)
                     .build()
                     .map_err(CreateIdentityServiceError::HttpClient)?,
                 ResolverOptions {
@@ -67,20 +63,20 @@ impl IdentityService {
                     },
                     public_fallback_for_handle: true,
                     validate_doc_id: true,
-                    request_timeout: Some(options.http_timeout),
+                    request_timeout: Some(Duration::from_secs(10)),
                     ..Default::default()
                 },
             ),
             cache: MokaCache::<Did<'static>, Url>::builder()
                 .name("identity")
+                .eviction_policy(EvictionPolicy::tiny_lfu())
+                .max_capacity(options.cache_memory_allocation)
+                .time_to_live(options.cache_ttl)
                 .weigher(|key, value| {
                     (key.len() + value.as_str().len())
                         .try_into()
                         .unwrap_or(u32::MAX)
                 })
-                .eviction_policy(EvictionPolicy::tiny_lfu())
-                .max_capacity(options.cache_memory_allocation)
-                .time_to_live(options.cache_ttl)
                 .build(),
         })
     }
@@ -107,7 +103,7 @@ impl IdentityService {
             .await
     }
 
-    /// Clears all cached data for the given Di.
+    /// Clears all cached data for the given Did.
     pub async fn invalidate_did_cache(&self, did: &Did<'static>) {
         self.cache.invalidate(did).await
     }
@@ -124,8 +120,6 @@ mod tests {
         IdentityService::new(IdentityServiceOptions {
             cache_memory_allocation: 500,
             cache_ttl: Duration::from_hours(24),
-            http_timeout: Duration::from_secs(30),
-            http_connect_timeout: Duration::from_secs(15),
             plc_directory_url: Url::parse("https://plc.directory").unwrap(),
         })
         .expect("service constructor should be always be valid")

@@ -57,10 +57,6 @@ pub struct PolicyClientOptions {
     pub cache_max_memory_allocation: u64,
     /// Time-to-live duration of items in the cache.
     pub cache_ttl: Duration,
-    /// HTTP timeout to apply to all identity requests.
-    pub http_timeout: Duration,
-    /// HTTP connection-phase timeout to apply to all policy requests.
-    pub http_connect_timeout: Duration,
     /// URL to the policy service to query.
     pub policy_service_url: Url,
     /// Additional request headers to append to each policy service request.
@@ -81,26 +77,26 @@ impl PolicyClient {
         Ok(Self {
             cache: MokaCache::<(Did<'static>, BlobCid), PolicyDecision>::builder()
                 .name("policy")
+                .eviction_policy(EvictionPolicy::tiny_lfu())
+                .max_capacity(options.cache_max_memory_allocation)
+                .support_invalidation_closures()
+                .time_to_live(options.cache_ttl)
                 .weigher(|key, _value| {
                     (key.0.len() + key.1.encoded_len())
                         .try_into()
                         .unwrap_or(u32::MAX)
                 })
-                .eviction_policy(EvictionPolicy::tiny_lfu())
-                .max_capacity(options.cache_max_memory_allocation)
-                .time_to_live(options.cache_ttl)
-                .support_invalidation_closures()
                 .build(),
             http_client: reqwest::Client::builder()
-                .user_agent(USER_AGENT)
-                .https_only(false)
-                .redirect(reqwest::redirect::Policy::limited(2))
-                .gzip(true)
                 .brotli(true)
-                .zstd(true)
+                .connect_timeout(Duration::from_secs(5))
                 .deflate(true)
-                .connect_timeout(options.http_connect_timeout)
-                .timeout(options.http_timeout)
+                .gzip(true)
+                .https_only(false)
+                .redirect(reqwest::redirect::Policy::limited(3))
+                .timeout(Duration::from_secs(10))
+                .user_agent(USER_AGENT)
+                .zstd(true)
                 .build()
                 .map_err(CreatePolicyClientError::HttpClient)?,
             policy_service_url: options.policy_service_url,

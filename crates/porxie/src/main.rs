@@ -13,7 +13,7 @@ use crate::{
     cache::compute_cache_sizes,
     identity_service::{IdentityService, IdentityServiceOptions},
     policy_client::{PolicyClient, PolicyClientOptions},
-    server::{PorxieServer, PorxieServerOptions, SocketAddress},
+    server::{PorxieServer, PorxieServerOptions, SocketAddress, use_system_shutdown_signal},
 };
 use axum::http::{HeaderName, HeaderValue};
 use bytesize::ByteSize;
@@ -72,11 +72,11 @@ struct ServerArgs {
     )]
     address: SocketAddress,
 
-    /// Admin password for authenticating priviledged requests.
-    ///
-    /// When unset, all authenticated endpoints will reject requests with HTTP 401.
+    /// Admin password for authenticating privileged requests.
     ///
     /// Authenticated requests always expect the username `admin` as per specification.
+    ///
+    /// When not set, authenticated endpoints will be unavailable.
     #[arg(
         id = "SA_SERVER_ADMIN_PASSWORD",
         long = "server-admin-password",
@@ -108,9 +108,7 @@ struct BlobArgs {
 
     /// Maximum blob size that can be served.
     ///
-    /// Blobs that exceed this limit will return HTTP 413.
-    ///
-    /// The minimum value is 512kb and the maximum is the system's total memory.
+    /// This value cannot be set higher than the system's total memory.
     #[arg(
         id = "BA_BLOB_MAX_SIZE",
         long = "blob-max-size",
@@ -118,10 +116,6 @@ struct BlobArgs {
         default_value = "25mb",
         value_parser = |v: &str| -> Result<NonZeroU64, String> {
             let size: ByteSize = v.parse().map_err(|e| format!("{e}"))?;
-            if size.as_u64() < 512_000 {
-                return Err("minimum allowed value is 512kb".to_string())
-            }
-
             let total_mem = sysinfo::System::new_with_specifics(
                 sysinfo::RefreshKind::nothing().with_memory(sysinfo::MemoryRefreshKind::everything()),
             ).total_memory();
@@ -131,7 +125,6 @@ struct BlobArgs {
                     ByteSize(total_mem).display().si(),
                 ));
             }
-
             Ok(size.as_u64().try_into().map_err(|e| format!("invalid value {v}: {e}"))?)
         }
     )]
@@ -140,8 +133,7 @@ struct BlobArgs {
     /// The Cache-Control header value to send alongside blob responses.
     ///
     /// This does not affect internal cache lifetimes, only how downstream clients such as CDNs
-    /// and browsers are instructed to cache responses. Intermediary caches may need to be cleared
-    /// manually for changes to take effect quickly.
+    /// and browsers are instructed to cache responses.
     #[arg(
         id = "BA_BLOB_CACHE_HEADER",
         long = "blob-cache-header",
@@ -167,25 +159,12 @@ struct BlobArgs {
         default_value = "30s"
     )]
     http_timeout: humantime::Duration,
-
-    /// Maximum duration before an attempted connection to a blob upstream is aborted.
-    ///
-    /// This value should be lower than --blob-http-timeout.
-    #[arg(
-        id = "BA_BLOB_FETCH_CONNECT_TIMEOUT",
-        long = "blob-http-connect-timeout",
-        env = "PORXIE_BLOB_HTTP_CONNECT_TIMEOUT",
-        default_value = "10s"
-    )]
-    http_connect_timeout: humantime::Duration,
 }
 
 #[derive(Args)]
 #[command(next_help_heading = "Identity Options")]
 struct IdentityArgs {
     /// URL of the PLC instance used for `did:plc` lookups.
-    ///
-    /// Can typically be left as default unless using a custom or local development setup.
     #[arg(
         id = "IA_PLC_URL",
         long = "identity-plc-url",
@@ -193,26 +172,6 @@ struct IdentityArgs {
         default_value = "https://plc.directory"
     )]
     plc_url: Url,
-
-    /// Maximum duration before identity resolution requests are timed out.
-    #[arg(
-        id = "IA_IDENTITY_HTTP_TIMEOUT",
-        long = "identity-http-timeout",
-        env = "PORXIE_IDENTITY_HTTP_TIMEOUT",
-        default_value = "10s"
-    )]
-    http_timeout: humantime::Duration,
-
-    /// Maximum duration before a connection attempt to an identity upstream is aborted.
-    ///
-    /// This value should be lower than --identity-http-timeout.
-    #[arg(
-        id = "IA_IDENTITY_HTTP_CONNECT_TIMEOUT",
-        long = "identity-http-connect-timeout",
-        env = "PORXIE_IDENTITY_HTTP_CONNECT_TIMEOUT",
-        default_value = "8s"
-    )]
-    http_connect_timeout: humantime::Duration,
 }
 
 #[derive(Args)]
@@ -221,7 +180,7 @@ struct CacheArgs {
     /// Total memory allocation for the internal cache.
     ///
     /// Blobs are cached using an LFU policy. The most frequently requested blobs are kept longest
-    /// when the cache approaches its limit.
+    /// when the cache reaches maximum size.
     ///
     /// For production deployments, a CDN or caching layer in front of this server is recommended
     /// for lower latency and better global availability.
@@ -295,20 +254,20 @@ struct CacheArgs {
 struct PolicyServiceArgs {
     /// Policy service URL that DID+CID pairs will be checked against.
     ///
-    /// Requests are sent via XRPC tp <url>/xrpc/dev.blooym.porxie.getBlobPolicy?did=<did>&cid=<cid>.
+    /// Requests are sent via XRPC to <url>/xrpc/dev.blooym.porxie.getBlobPolicy.
     #[arg(id = "PA_POLICY_URL", long = "policy-url", env = "PORXIE_POLICY_URL")]
     url: Option<Url>,
 
-    /// Headers sent alongside all requests to the policy service.
+    /// Headers sent alongside requests to the policy service.
     ///
     /// Each header must be in the format "Name: value". When using the CLI, the flag can be used multiple times.
     /// When setting via environment variable, headers are pipe-separated (|).
     ///
     /// As pipes are used as a delimiter, they cannot be contained in headers.
     ///
-    /// Example (cli): '--policy-request-headers "X-Hello: world" --policy-request-headers "X-Foo: bar"'
+    /// Example (CLI): '--policy-request-headers "X-Hello: world" --policy-request-headers "X-Foo: bar"'
     ///
-    /// Example (env): 'PORXIE_POLICY_REQUEST_HEADERS="X-Hello: world|X-Foo: bar"'
+    /// Example (ENV): 'PORXIE_POLICY_REQUEST_HEADERS="X-Hello: world|X-Foo: bar"'
     #[arg(
         id = "PA_POLICY_REQ_HEADERS",
         long = "policy-request-headers",
@@ -328,9 +287,9 @@ struct PolicyServiceArgs {
     )]
     request_headers: Vec<(HeaderName, HeaderValue)>,
 
-    /// Allow requests to proceed if the policy service is unavailable..
+    /// Allow requests to proceed even if the policy service is unavailable.
     ///
-    /// Warning: enabling this means restricted blobs may be served when the policy service is unreachable.
+    /// Warning: enabling this means restricted blobs may be served when the policy service is  unavailable.
     #[arg(
         id = "PA_POLICY_FAIL_OPEN",
         long = "policy-fail-open",
@@ -338,26 +297,6 @@ struct PolicyServiceArgs {
         requires = "PA_POLICY_URL"
     )]
     fail_open: bool,
-
-    /// Maximum duration before policy service requests are timed out.
-    #[arg(
-        id = "PA_POLICY_HTTP_TIMEOUT",
-        long = "policy-http-timeout",
-        env = "PORXIE_POLICY_HTTP_TIMEOUT",
-        default_value = "30s"
-    )]
-    http_timeout: humantime::Duration,
-
-    /// Maximum duration before an attempted connection to the policy service is aborted.
-    ///
-    /// This value should be lower than --policy-http-timeout.
-    #[arg(
-        id = "PA_POLICY_HTTP_CONNECT_TIMEOUT",
-        long = "policy-http-connect-timeout",
-        env = "PORXIE_POLICY_HTTP_CONNECT_TIMEOUT",
-        default_value = "10s"
-    )]
-    http_connect_timeout: humantime::Duration,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -374,8 +313,6 @@ async fn main() -> anyhow::Result<()> {
         identity_service: IdentityService::new(IdentityServiceOptions {
             cache_memory_allocation: cache_sizes.identity,
             cache_ttl: args.cache.identity_ttl.into(),
-            http_timeout: args.identity.http_timeout.into(),
-            http_connect_timeout: args.identity.http_connect_timeout.into(),
             plc_directory_url: args.identity.plc_url,
         })?,
         policy_client: args
@@ -387,14 +324,11 @@ async fn main() -> anyhow::Result<()> {
                     policy_service_req_headers: args.policy.request_headers,
                     cache_max_memory_allocation: cache_sizes.policy,
                     cache_ttl: args.cache.policy_ttl.into(),
-                    http_timeout: args.policy.http_timeout.into(),
-                    http_connect_timeout: args.policy.http_connect_timeout.into(),
                 })
             })
             .transpose()?,
         blob_service: BlobService::new(BlobServiceOptions {
             http_timeout: args.blob.http_timeout.into(),
-            http_connect_timeout: args.blob.http_connect_timeout.into(),
             data_cache_max_capacity: cache_sizes.blob,
             data_cache_tti: args.cache.blob_tti.into(),
             ownership_cache_max_capacity: cache_sizes.ownership,
@@ -409,32 +343,9 @@ async fn main() -> anyhow::Result<()> {
         policy_fail_open: args.policy.fail_open,
     });
 
-    server.start(args.server.address, shutdown_signal()).await?;
+    server
+        .start(args.server.address, use_system_shutdown_signal())
+        .await?;
 
     Ok(())
-}
-
-// https://github.com/tokio-rs/axum/blob/15917c6dbcb4a48707a20e9cfd021992a279a662/examples/graceful-shutdown/src/main.rs#L55
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
-    #[cfg(not(unix))]
-    let terminate = core::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
 }
