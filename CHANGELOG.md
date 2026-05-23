@@ -1,8 +1,9 @@
 # Changelog
 
-## [unreleased]
+## [0.3.3] - 2026-05-23
 
-- All blob fetch requests will now contain the HTTP `Accept` header containing the configured allowed mimetypes.
+- All blob fetch requests will now send the HTTP `Accept` header containing the configured allowed mimetypes.
+- Identity and policy requests with now send the HTTP `Accept` header containing the required response format.
 
 ## [0.3.2] - 2026-05-23
 
