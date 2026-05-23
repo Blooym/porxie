@@ -4,6 +4,13 @@ license = "AGPL-3.0-or-later"
 version = "0.0.0"
 edition = "2024"
 
+[lints.clippy]
+all = "allow"
+
+[lints.rust]
+warnings = "allow"
+unsafe_code = "forbid"
+
 [features]
 dev_blooym = []
 

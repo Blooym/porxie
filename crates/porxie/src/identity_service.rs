@@ -59,7 +59,7 @@ impl IdentityService {
                         base: jacquard_common::deps::fluent_uri::Uri::from_str(
                             options.plc_directory_url.as_str(),
                         )
-                        .unwrap(),
+                        .expect("conversion between url and fluent_uri should always succeed"),
                     },
                     public_fallback_for_handle: true,
                     validate_doc_id: true,

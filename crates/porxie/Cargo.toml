@@ -9,6 +9,13 @@ license = "AGPL-3.0-or-later"
 version = "0.3.2"
 edition = "2024"
 
+[lints.clippy]
+unwrap_used = "deny"
+panic = "deny"
+
+[lints.rust]
+unsafe_code = "forbid"
+
 [dependencies]
 anyhow = { version = "1.0.102", features = ["std"], default-features = false }
 axum = { version = "0.8.8", features = [

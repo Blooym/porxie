@@ -8,7 +8,7 @@ use std::sync::Arc;
 pub async fn xrpc_cache_purge_all_handler(
     _auth: AdminXrpcAuth,
     State(state): State<Arc<ServerState>>,
-    ExtractXrpc(request): ExtractXrpc<PurgeAllRequest>,
+    ExtractXrpc(_request): ExtractXrpc<PurgeAllRequest>,
 ) -> StatusCode {
     if let Some(ref policy_client) = state.policy_client {
         policy_client.invalidate_cache_all();
