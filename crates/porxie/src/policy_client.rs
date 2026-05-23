@@ -165,8 +165,8 @@ impl PolicyClient {
             .await
     }
 
-    /// Invalidate cached policy entries if they match the predicate.
-    pub fn invalidate_cache_entries<
+    /// Invalidate cache entries matching the predicate.
+    pub fn invalidate_cache_entries_if<
         F: Fn(&(Did<'static>, BlobCid), &PolicyDecision) -> bool + Send + Sync + 'static,
     >(
         &self,
@@ -177,6 +177,11 @@ impl PolicyClient {
                 "policy client cache has not enabled support for invalidation closures: {err:?}"
             );
         }
+    }
+
+    /// Invalidate all cache entries.
+    pub fn invalidate_cache_all(&self) {
+        self.cache.invalidate_all();
     }
 }
 

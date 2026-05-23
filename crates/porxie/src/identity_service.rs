@@ -103,9 +103,14 @@ impl IdentityService {
             .await
     }
 
-    /// Clears all cached data for the given Did.
-    pub async fn invalidate_did_cache(&self, did: &Did<'static>) {
+    /// Invalidate the cache entry for the given DID.
+    pub async fn invalidate_cache_entry(&self, did: &Did<'static>) {
         self.cache.invalidate(did).await
+    }
+
+    /// Invalidate all cache entries.
+    pub fn invalidate_cache_all(&self) {
+        self.cache.invalidate_all();
     }
 }
 
@@ -136,7 +141,7 @@ mod tests {
         assert!(resolver.cache.contains_key(&did));
 
         // Test invalidation
-        resolver.invalidate_did_cache(&did).await;
+        resolver.invalidate_cache_entry(&did).await;
         assert!(!resolver.cache.contains_key(&did));
     }
 

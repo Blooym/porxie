@@ -34,12 +34,12 @@ pub async fn xrpc_cache_purge_blob_handler(
     })?;
 
     if let Some(ref policy_client) = state.policy_client {
-        policy_client.invalidate_cache_entries(move |k, _v| k.1 == cid)
+        policy_client.invalidate_cache_entries_if(move |k, _v| k.1 == cid)
     }
-    state.blob_service.invalidate_blob_cache_entry(&cid).await;
+    state.blob_service.invalidate_data_cache_entry(&cid).await;
     state
         .blob_service
-        .invalidate_blob_ownership_cache_entries(move |k, _v| k.0 == cid);
+        .invalidate_ownership_cache_entries_if(move |k, _v| k.0 == cid);
 
     Ok(StatusCode::OK)
 }

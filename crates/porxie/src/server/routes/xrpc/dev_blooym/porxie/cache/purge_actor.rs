@@ -11,18 +11,18 @@ pub async fn xrpc_cache_purge_actor_handler(
     ExtractXrpc(request): ExtractXrpc<PurgeActorRequest>,
 ) -> StatusCode {
     if let Some(ref policy_client) = state.policy_client {
-        policy_client.invalidate_cache_entries({
+        policy_client.invalidate_cache_entries_if({
             let did = request.did.clone();
             move |k, _v| k.0 == did
         })
     }
     state
         .identity_service
-        .invalidate_did_cache(&request.did)
+        .invalidate_cache_entry(&request.did)
         .await;
     state
         .blob_service
-        .invalidate_blob_ownership_cache_entries(move |k, _v| k.1 == request.did);
+        .invalidate_ownership_cache_entries_if(move |k, _v| k.1 == request.did);
 
     StatusCode::OK
 }

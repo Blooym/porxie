@@ -15,7 +15,10 @@ use crate::{
             get_blob_handler, get_index_handler,
             xrpc::{
                 dev_blooym::porxie::{
-                    cache::{xrpc_cache_purge_actor_handler, xrpc_cache_purge_blob_handler},
+                    cache::{
+                        xrpc_cache_purge_actor_handler, xrpc_cache_purge_all_handler,
+                        xrpc_cache_purge_blob_handler,
+                    },
                     xrpc_compat_get_blob_handler, xrpc_get_blob_metadata_handler,
                 },
                 xrpc_fallback_handler, xrpc_get_health_handler,
@@ -85,6 +88,7 @@ impl PorxieServer {
                 "/xrpc",
                 Router::new()
                     .route("/_health", get(xrpc_get_health_handler))
+                    // Blob
                     .route(
                         "/dev.blooym.porxie.getBlob",
                         get(xrpc_compat_get_blob_handler).layer(TimeoutLayer::with_status_code(
@@ -99,6 +103,7 @@ impl PorxieServer {
                             options.blob_processing_timeout,
                         )),
                     )
+                    // Cache
                     .route(
                         "/dev.blooym.porxie.cache.purgeActor",
                         post(xrpc_cache_purge_actor_handler),
@@ -106,6 +111,10 @@ impl PorxieServer {
                     .route(
                         "/dev.blooym.porxie.cache.purgeBlob",
                         post(xrpc_cache_purge_blob_handler),
+                    )
+                    .route(
+                        "/dev.blooym.porxie.cache.purgeAll",
+                        post(xrpc_cache_purge_all_handler),
                     )
                     // Ensure /xrpc/... routes don't fall through elsewhere.
                     .route("/{rest}", any(xrpc_fallback_handler)),

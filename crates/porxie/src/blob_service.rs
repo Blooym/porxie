@@ -337,13 +337,13 @@ impl BlobService {
             .await
     }
 
-    /// Invalid a specific blob cache entry.
-    pub async fn invalidate_blob_cache_entry(&self, cid: &BlobCid) {
+    /// Invalidate the data cache entry for the given CID.
+    pub async fn invalidate_data_cache_entry(&self, cid: &BlobCid) {
         self.data_cache.invalidate(cid).await
     }
 
-    /// Invalidate blob ownership cache entries if they match the predicate.
-    pub fn invalidate_blob_ownership_cache_entries<
+    /// Invalidate ownership cache entries matching the predicate.
+    pub fn invalidate_ownership_cache_entries_if<
         F: Fn(&(BlobCid, Did<'static>), &()) -> bool + Send + Sync + 'static,
     >(
         &self,
@@ -354,5 +354,15 @@ impl BlobService {
                 "blob service has not enabled support for invalidation closures: {err:?}"
             );
         }
+    }
+
+    /// Invalidate all data cache entries.
+    pub fn invalidate_data_cache_all(&self) {
+        self.data_cache.invalidate_all();
+    }
+
+    /// Invalidate all ownership cache entries.
+    pub fn invalidate_ownership_cache_all(&self) {
+        self.ownership_cache.invalidate_all();
     }
 }

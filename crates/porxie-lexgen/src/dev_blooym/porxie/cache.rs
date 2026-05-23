@@ -4,4 +4,5 @@
 // Any manual changes will be overwritten on the next regeneration.
 
 pub mod purge_actor;
+pub mod purge_all;
 pub mod purge_blob;
