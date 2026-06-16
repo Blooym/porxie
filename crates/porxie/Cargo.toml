@@ -90,9 +90,6 @@ serde = { version = "1.0.228", features = [
 ], default-features = false }
 serde_json = "1.0.149"
 subtle = { version = "2.6", default-features = false, features = ["std"] }
-sysinfo = { version = "0.38.4", default-features = false, features = [
-    "system",
-] }
 thiserror = { version = "2.0.18", default-features = false, features = ["std"] }
 tokio = { version = "1.50.0", default-features = false, features = [
     "macros",

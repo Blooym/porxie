@@ -105,26 +105,11 @@ struct BlobArgs {
     allowed_mimetypes: Vec<Mime>,
 
     /// Maximum blob size that can be served.
-    ///
-    /// This value cannot be set higher than the system's total memory.
     #[arg(
         id = "BA_BLOB_MAX_SIZE",
         long = "blob-max-size",
         env = "PORXIE_BLOB_MAX_SIZE",
-        default_value = "25mb",
-        value_parser = |v: &str| -> Result<NonZeroU64, String> {
-            let size: ByteSize = v.parse().map_err(|e| format!("{e}"))?;
-            let total_mem = sysinfo::System::new_with_specifics(
-                sysinfo::RefreshKind::nothing().with_memory(sysinfo::MemoryRefreshKind::everything()),
-            ).total_memory();
-            if size.as_u64() > total_mem {
-                return Err(format!(
-                    "exceeds total system memory ({}) and could cause system instability",
-                    ByteSize(total_mem).display().si(),
-                ));
-            }
-            Ok(size.as_u64().try_into().map_err(|e| format!("invalid value {v}: {e}"))?)
-        }
+        default_value = "25mb"
     )]
     max_size: NonZeroU64,
 
@@ -183,7 +168,7 @@ struct CacheArgs {
     /// For production deployments, a CDN or caching layer in front of this server is recommended
     /// for lower latency and better global availability.
     ///
-    /// The minimum value is 8mb and the maximum is the system's total memory.
+    /// The minimum value is 8mb.
     #[arg(
         id = "CA_CACHE_ALLOCATION",
         long = "cache-allocation",
@@ -194,17 +179,6 @@ struct CacheArgs {
             if size.as_u64() < 8_000_000 {
                 return Err("minimum allowed value is 8mb".to_string())
             }
-
-            let total_mem = sysinfo::System::new_with_specifics(
-                sysinfo::RefreshKind::nothing().with_memory(sysinfo::MemoryRefreshKind::everything()),
-            ).total_memory();
-            if size.as_u64() > total_mem {
-                return Err(format!(
-                    "exceeds total system memory ({}) and could cause system instability",
-                    ByteSize(total_mem).display().si(),
-                ));
-            }
-
             Ok(size.as_u64().try_into().map_err(|e| format!("invalid value {v}: {e}"))?)
         }
     )]
