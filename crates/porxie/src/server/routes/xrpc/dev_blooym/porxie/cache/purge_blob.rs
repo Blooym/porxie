@@ -22,7 +22,7 @@ pub async fn xrpc_cache_purge_blob_handler(
     (
         StatusCode,
         [(HeaderName, &'static str); 1],
-        Json<XrpcError<PurgeBlobError<'static>>>,
+        Json<XrpcError<PurgeBlobError>>,
     ),
 > {
     let cid = BlobCid::try_from(request.cid.as_str()).map_err(|_| {

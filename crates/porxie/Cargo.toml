@@ -18,7 +18,7 @@ unsafe_code = "forbid"
 
 [dependencies]
 anyhow = { version = "1.0.102", features = ["std"], default-features = false }
-axum = { version = "0.8.8", features = [
+axum = { version = "0.8.9", features = [
     "http1",
     "http2",
     "json",
@@ -27,14 +27,14 @@ axum = { version = "0.8.8", features = [
     "tower-log",
     "tracing",
 ], default-features = false }
-axum-extra = { version = "0.12.5", features = [
+axum-extra = { version = "0.12.6", features = [
     "typed-header",
     "tracing",
 ], default-features = false }
 bytes = { version = "1.11.1", features = ["std"], default-features = false }
-bytesize = { version = "2.3.1", features = ["std"], default-features = false }
-cid = { version = "0.11.1", features = ["std"], default-features = false }
-clap = { version = "4.5.60", features = [
+bytesize = { version = "2.4.0", features = ["std"], default-features = false }
+cid = { version = "0.11.3", features = ["std"], default-features = false }
+clap = { version = "4.6.1", features = [
     "color",
     "derive",
     "env",
@@ -47,16 +47,12 @@ clap = { version = "4.5.60", features = [
 dotenvy = { version = "0.15.7", default-features = false }
 futures-util = { version = "0.3.32", default-features = false }
 humantime = { version = "2.3.0", default-features = false }
-jacquard-axum = { version = "0.11.0", default-features = false, features = [
+jacquard-axum = { git = "https://tangled.org/nonbinary.computer/jacquard", rev = "f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80", default-features = false, features = [
     "tracing",
 ] }
-jacquard-common = { version = "0.11.0", default-features = false }
-jacquard-identity = { version = "0.11.0", features = ["tracing"] }
+jacquard-common = { git = "https://tangled.org/nonbinary.computer/jacquard", rev = "f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80", default-features = false }
+jacquard-identity = { git = "https://tangled.org/nonbinary.computer/jacquard", rev = "f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80", features = ["tracing"] }
 jemallocator = "0.5.4"
-json-subscriber = { version = "0.2.8", default-features = false, features = [
-    "tracing-log",
-    "env-filter",
-] }
 porxie-lexgen = { path = "../porxie-lexgen", default-features = false, features = [
     "dev_blooym",
 ] }
@@ -64,11 +60,11 @@ porxie-mediautil = { path = "../porxie-mediautil", default-features = false, fea
     "video-metadata",
     "image-metadata",
 ] }
-moka = { version = "0.12.14", features = [
+moka = { version = "0.12.15", features = [
     "future",
     "logging",
 ], default-features = false }
-multihash-codetable = { version = "0.2.1", features = [
+multihash-codetable = { version = "0.2.2", features = [
     "sha2",
     # "blake3", # if it ever gets added to the spec.
     "std",
@@ -88,19 +84,19 @@ serde = { version = "1.0.228", features = [
     "derive",
     "std",
 ], default-features = false }
-serde_json = "1.0.149"
-subtle = { version = "2.6", default-features = false, features = ["std"] }
-sysinfo = { version = "0.38.4", default-features = false, features = [
+serde_json = "1.0.150"
+subtle = { version = "2.6.1", default-features = false, features = ["std"] }
+sysinfo = { version = "0.39.3", default-features = false, features = [
     "system",
 ] }
 thiserror = { version = "2.0.18", default-features = false, features = ["std"] }
-tokio = { version = "1.50.0", default-features = false, features = [
+tokio = { version = "1.52.3", default-features = false, features = [
     "macros",
     "rt-multi-thread",
     "signal",
     "net",
 ] }
-tower-http = { version = "0.6.8", features = [
+tower-http = { version = "0.7.0", features = [
     "catch-panic",
     "normalize-path",
     "trace",
@@ -112,11 +108,12 @@ tracing = { version = "0.1.44", features = [
     "attributes",
     "std",
 ], default-features = false }
-tracing-subscriber = { version = "0.3.22", features = [
+tracing-subscriber = { version = "0.3.23", features = [
     "ansi",
     "env-filter",
     "fmt",
     "parking_lot",
+    "json",
     "smallvec",
     "std",
     "tracing",

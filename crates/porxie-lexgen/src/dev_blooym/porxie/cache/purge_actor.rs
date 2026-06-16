@@ -10,33 +10,41 @@ use alloc::collections::BTreeMap;
 
 #[allow(unused_imports)]
 use core::marker::PhantomData;
+use jacquard_common::{BosStr, DefaultStr, FromStaticStr};
+use jacquard_common::deps::smol_str::SmolStr;
 use jacquard_common::types::string::Did;
-use jacquard_derive::{IntoStatic, lexicon};
+use jacquard_common::types::value::Data;
+use jacquard_derive::IntoStatic;
 use serde::{Serialize, Deserialize};
 
-#[lexicon]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
-#[serde(rename_all = "camelCase")]
-pub struct PurgeActor<'a> {
-    #[serde(borrow)]
-    pub did: Did<'a>,
+#[serde(rename_all = "camelCase", bound(deserialize = "S: Deserialize<'de> + BosStr"))]
+pub struct PurgeActor<S: BosStr = DefaultStr> {
+    pub did: Did<S>,
+    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+    pub extra_data: Option<BTreeMap<SmolStr, Data<S>>>,
 }
 
 
-#[lexicon]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct PurgeActorOutput<'a> {}
-/// Response type for dev.blooym.porxie.cache.purgeActor
+#[serde(rename_all = "camelCase", bound(deserialize = "S: Deserialize<'de> + BosStr"))]
+pub struct PurgeActorOutput<S: BosStr = DefaultStr> {
+    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+    pub extra_data: Option<BTreeMap<SmolStr, Data<S>>>,
+}
+
+/** Response marker for the `dev.blooym.porxie.cache.purgeActor` procedure.
+
+Implements `jacquard_common::xrpc::XrpcResp`; successful bodies decode as `Self::Output<S>`, which is `PurgeActorOutput<S>` for this endpoint.*/
 pub struct PurgeActorResponse;
 impl jacquard_common::xrpc::XrpcResp for PurgeActorResponse {
     const NSID: &'static str = "dev.blooym.porxie.cache.purgeActor";
     const ENCODING: &'static str = "application/json";
-    type Output<'de> = PurgeActorOutput<'de>;
-    type Err<'de> = jacquard_common::xrpc::GenericError<'de>;
+    type Output<S: BosStr> = PurgeActorOutput<S>;
+    type Err = jacquard_common::xrpc::GenericError;
 }
 
-impl<'a> jacquard_common::xrpc::XrpcRequest for PurgeActor<'a> {
+impl<S: BosStr> jacquard_common::xrpc::XrpcRequest for PurgeActor<S> {
     const NSID: &'static str = "dev.blooym.porxie.cache.purgeActor";
     const METHOD: jacquard_common::xrpc::XrpcMethod = jacquard_common::xrpc::XrpcMethod::Procedure(
         "application/json",
@@ -44,14 +52,16 @@ impl<'a> jacquard_common::xrpc::XrpcRequest for PurgeActor<'a> {
     type Response = PurgeActorResponse;
 }
 
-/// Endpoint type for dev.blooym.porxie.cache.purgeActor
+/** Endpoint marker for the `dev.blooym.porxie.cache.purgeActor` procedure.
+
+Path: `/xrpc/dev.blooym.porxie.cache.purgeActor`. The request payload type is `PurgeActor<S>`; send that request with `jacquard::Client` or use this marker through lower-level `XrpcEndpoint` APIs.*/
 pub struct PurgeActorRequest;
 impl jacquard_common::xrpc::XrpcEndpoint for PurgeActorRequest {
     const PATH: &'static str = "/xrpc/dev.blooym.porxie.cache.purgeActor";
     const METHOD: jacquard_common::xrpc::XrpcMethod = jacquard_common::xrpc::XrpcMethod::Procedure(
         "application/json",
     );
-    type Request<'de> = PurgeActor<'de>;
+    type Request<S: BosStr> = PurgeActor<S>;
     type Response = PurgeActorResponse;
 }
 
@@ -74,9 +84,9 @@ pub mod purge_actor_state {
         type Did = Unset;
     }
     ///State transition - sets the `did` field to Set
-    pub struct SetDid<S: State = Empty>(PhantomData<fn() -> S>);
-    impl<S: State> sealed::Sealed for SetDid<S> {}
-    impl<S: State> State for SetDid<S> {
+    pub struct SetDid<St: State = Empty>(PhantomData<fn() -> St>);
+    impl<St: State> sealed::Sealed for SetDid<St> {}
+    impl<St: State> State for SetDid<St> {
         type Did = Set<members::did>;
     }
     /// Marker types for field names
@@ -87,70 +97,85 @@ pub mod purge_actor_state {
     }
 }
 
-/// Builder for constructing an instance of this type
-pub struct PurgeActorBuilder<'a, S: purge_actor_state::State> {
-    _state: PhantomData<fn() -> S>,
-    _fields: (Option<Did<'a>>,),
-    _lifetime: PhantomData<&'a ()>,
+/// Builder for constructing an instance of this type.
+pub struct PurgeActorBuilder<St: purge_actor_state::State, S: BosStr = DefaultStr> {
+    _state: PhantomData<fn() -> St>,
+    _fields: (Option<Did<S>>,),
+    _type: PhantomData<fn() -> S>,
 }
 
-impl<'a> PurgeActor<'a> {
-    /// Create a new builder for this type
-    pub fn new() -> PurgeActorBuilder<'a, purge_actor_state::Empty> {
+impl PurgeActor<DefaultStr> {
+    /// Create a new builder for this type, using the default string type (DefaultStr = SmolStr) if needed
+    pub fn new() -> PurgeActorBuilder<purge_actor_state::Empty, DefaultStr> {
         PurgeActorBuilder::new()
     }
 }
 
-impl<'a> PurgeActorBuilder<'a, purge_actor_state::Empty> {
-    /// Create a new builder with all fields unset
+impl<S: BosStr> PurgeActor<S> {
+    /// Create a new builder for this type
+    pub fn builder() -> PurgeActorBuilder<purge_actor_state::Empty, S> {
+        PurgeActorBuilder::builder()
+    }
+}
+
+impl PurgeActorBuilder<purge_actor_state::Empty, DefaultStr> {
+    /// Create a new builder with all fields unset, using the default string type, if needed
     pub fn new() -> Self {
         PurgeActorBuilder {
             _state: PhantomData,
             _fields: (None,),
-            _lifetime: PhantomData,
+            _type: PhantomData,
         }
     }
 }
 
-impl<'a, S> PurgeActorBuilder<'a, S>
+impl<S: BosStr> PurgeActorBuilder<purge_actor_state::Empty, S> {
+    /// Create a new builder with all fields unset
+    pub fn builder() -> Self {
+        PurgeActorBuilder {
+            _state: PhantomData,
+            _fields: (None,),
+            _type: PhantomData,
+        }
+    }
+}
+
+impl<St, S: BosStr> PurgeActorBuilder<St, S>
 where
-    S: purge_actor_state::State,
-    S::Did: purge_actor_state::IsUnset,
+    St: purge_actor_state::State,
+    St::Did: purge_actor_state::IsUnset,
 {
     /// Set the `did` field (required)
     pub fn did(
         mut self,
-        value: impl Into<Did<'a>>,
-    ) -> PurgeActorBuilder<'a, purge_actor_state::SetDid<S>> {
+        value: impl Into<Did<S>>,
+    ) -> PurgeActorBuilder<purge_actor_state::SetDid<St>, S> {
         self._fields.0 = Option::Some(value.into());
         PurgeActorBuilder {
             _state: PhantomData,
             _fields: self._fields,
-            _lifetime: PhantomData,
+            _type: PhantomData,
         }
     }
 }
 
-impl<'a, S> PurgeActorBuilder<'a, S>
+impl<St, S: BosStr> PurgeActorBuilder<St, S>
 where
-    S: purge_actor_state::State,
-    S::Did: purge_actor_state::IsSet,
+    St: purge_actor_state::State,
+    St::Did: purge_actor_state::IsSet,
 {
-    /// Build the final struct
-    pub fn build(self) -> PurgeActor<'a> {
+    /// Build the final struct.
+    pub fn build(self) -> PurgeActor<S> {
         PurgeActor {
             did: self._fields.0.unwrap(),
             extra_data: Default::default(),
         }
     }
-    /// Build the final struct with custom extra_data
+    /// Build the final struct with custom extra_data.
     pub fn build_with_data(
         self,
-        extra_data: BTreeMap<
-            jacquard_common::deps::smol_str::SmolStr,
-            jacquard_common::types::value::Data<'a>,
-        >,
-    ) -> PurgeActor<'a> {
+        extra_data: BTreeMap<SmolStr, Data<S>>,
+    ) -> PurgeActor<S> {
         PurgeActor {
             did: self._fields.0.unwrap(),
             extra_data: Some(extra_data),

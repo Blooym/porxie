@@ -10,12 +10,14 @@ use alloc::collections::BTreeMap;
 
 #[allow(unused_imports)]
 use core::marker::PhantomData;
-use jacquard_common::CowStr;
+use jacquard_common::{CowStr, BosStr, DefaultStr, FromStaticStr};
 
 #[allow(unused_imports)]
 use jacquard_common::deps::codegen::unicode_segmentation::UnicodeSegmentation;
+use jacquard_common::deps::smol_str::SmolStr;
 use jacquard_common::types::string::{Did, Cid};
-use jacquard_derive::{IntoStatic, lexicon, open_union};
+use jacquard_common::types::value::Data;
+use jacquard_derive::{IntoStatic, open_union};
 use jacquard_lexicon::lexicon::LexiconDoc;
 use jacquard_lexicon::schema::LexiconSchema;
 
@@ -24,60 +26,57 @@ use jacquard_lexicon::validation::{ConstraintError, ValidationPath};
 use serde::{Serialize, Deserialize};
 use crate::dev_blooym::porxie::get_blob_metadata;
 
-#[lexicon]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
-#[serde(rename_all = "camelCase")]
-pub struct AspectRatio<'a> {
+#[serde(rename_all = "camelCase", bound(deserialize = "S: Deserialize<'de> + BosStr"))]
+pub struct AspectRatio<S: BosStr = DefaultStr> {
     pub height: i64,
     pub width: i64,
-}
-
-
-#[lexicon]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
-#[serde(rename_all = "camelCase")]
-pub struct ImageData<'a> {
-    #[serde(borrow)]
-    pub aspect_ratio: get_blob_metadata::AspectRatio<'a>,
+    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+    pub extra_data: Option<BTreeMap<SmolStr, Data<S>>>,
 }
 
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
-#[serde(rename_all = "camelCase")]
-pub struct GetBlobMetadata<'a> {
-    #[serde(borrow)]
-    pub cid: Cid<'a>,
-    #[serde(borrow)]
-    pub did: Did<'a>,
+#[serde(rename_all = "camelCase", bound(deserialize = "S: Deserialize<'de> + BosStr"))]
+pub struct ImageData<S: BosStr = DefaultStr> {
+    pub aspect_ratio: get_blob_metadata::AspectRatio<S>,
+    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+    pub extra_data: Option<BTreeMap<SmolStr, Data<S>>>,
 }
 
 
-#[lexicon]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
-#[serde(rename_all = "camelCase")]
-pub struct GetBlobMetadataOutput<'a> {
+#[serde(rename_all = "camelCase", bound(deserialize = "S: Deserialize<'de> + BosStr"))]
+pub struct GetBlobMetadata<S: BosStr = DefaultStr> {
+    pub cid: Cid<S>,
+    pub did: Did<S>,
+}
+
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
+#[serde(rename_all = "camelCase", bound(deserialize = "S: Deserialize<'de> + BosStr"))]
+pub struct GetBlobMetadataOutput<S: BosStr = DefaultStr> {
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(borrow)]
-    pub content_type: Option<CowStr<'a>>,
+    pub content_type: Option<S>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(borrow)]
-    pub data: Option<GetBlobMetadataOutputData<'a>>,
+    pub data: Option<GetBlobMetadataOutputData<S>>,
     pub size: i64,
+    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+    pub extra_data: Option<BTreeMap<SmolStr, Data<S>>>,
 }
 
 
 #[open_union]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
-#[serde(tag = "$type", bound(deserialize = "'de: 'a"))]
-pub enum GetBlobMetadataOutputData<'a> {
+#[serde(tag = "$type", bound(deserialize = "S: Deserialize<'de> + BosStr"))]
+pub enum GetBlobMetadataOutputData<S: BosStr = DefaultStr> {
     #[serde(rename = "dev.blooym.porxie.getBlobMetadata#imageData")]
-    ImageData(Box<get_blob_metadata::ImageData<'a>>),
+    ImageData(Box<get_blob_metadata::ImageData<S>>),
     #[serde(rename = "dev.blooym.porxie.getBlobMetadata#videoData")]
-    VideoData(Box<get_blob_metadata::VideoData<'a>>),
+    VideoData(Box<get_blob_metadata::VideoData<S>>),
 }
 
 
-#[open_union]
 #[derive(
     Serialize,
     Deserialize,
@@ -86,35 +85,36 @@ pub enum GetBlobMetadataOutputData<'a> {
     PartialEq,
     Eq,
     thiserror::Error,
-    miette::Diagnostic,
-    IntoStatic
+    miette::Diagnostic
 )]
 
 #[serde(tag = "error", content = "message")]
-#[serde(bound(deserialize = "'de: 'a"))]
-pub enum GetBlobMetadataError<'a> {
+pub enum GetBlobMetadataError {
     /// The provided CID was malformed or does not conform to specification.
     #[serde(rename = "MalformedCid")]
-    MalformedCid(Option<CowStr<'a>>),
+    MalformedCid(Option<SmolStr>),
     #[serde(rename = "BlobCidMismatch")]
-    BlobCidMismatch(Option<CowStr<'a>>),
+    BlobCidMismatch(Option<SmolStr>),
     #[serde(rename = "BlobFetchFailed")]
-    BlobFetchFailed(Option<CowStr<'a>>),
+    BlobFetchFailed(Option<SmolStr>),
     #[serde(rename = "BlobForbiddenType")]
-    BlobForbiddenType(Option<CowStr<'a>>),
+    BlobForbiddenType(Option<SmolStr>),
     #[serde(rename = "BlobNotFound")]
-    BlobNotFound(Option<CowStr<'a>>),
+    BlobNotFound(Option<SmolStr>),
     #[serde(rename = "BlobTooLarge")]
-    BlobTooLarge(Option<CowStr<'a>>),
+    BlobTooLarge(Option<SmolStr>),
     #[serde(rename = "CannotResolve")]
-    CannotResolve(Option<CowStr<'a>>),
+    CannotResolve(Option<SmolStr>),
     #[serde(rename = "CidUnsupported")]
-    CidUnsupported(Option<CowStr<'a>>),
+    CidUnsupported(Option<SmolStr>),
     #[serde(rename = "PolicyForbidden")]
-    PolicyForbidden(Option<CowStr<'a>>),
+    PolicyForbidden(Option<SmolStr>),
+    /// Catch-all for unknown error codes.
+    #[serde(untagged)]
+    Other { error: SmolStr, message: Option<SmolStr> },
 }
 
-impl core::fmt::Display for GetBlobMetadataError<'_> {
+impl core::fmt::Display for GetBlobMetadataError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::MalformedCid(msg) => {
@@ -180,22 +180,28 @@ impl core::fmt::Display for GetBlobMetadataError<'_> {
                 }
                 Ok(())
             }
-            Self::Unknown(err) => write!(f, "Unknown error: {:?}", err),
+            Self::Other { error, message } => {
+                write!(f, "{}", error)?;
+                if let Some(msg) = message {
+                    write!(f, ": {}", msg)?;
+                }
+                Ok(())
+            }
         }
     }
 }
 
 
-#[lexicon]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic)]
-#[serde(rename_all = "camelCase")]
-pub struct VideoData<'a> {
-    #[serde(borrow)]
-    pub aspect_ratio: get_blob_metadata::AspectRatio<'a>,
+#[serde(rename_all = "camelCase", bound(deserialize = "S: Deserialize<'de> + BosStr"))]
+pub struct VideoData<S: BosStr = DefaultStr> {
+    pub aspect_ratio: get_blob_metadata::AspectRatio<S>,
     pub duration_ms: i64,
+    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+    pub extra_data: Option<BTreeMap<SmolStr, Data<S>>>,
 }
 
-impl<'a> LexiconSchema for AspectRatio<'a> {
+impl<S: BosStr> LexiconSchema for AspectRatio<S> {
     fn nsid() -> &'static str {
         "dev.blooym.porxie.getBlobMetadata"
     }
@@ -230,7 +236,7 @@ impl<'a> LexiconSchema for AspectRatio<'a> {
     }
 }
 
-impl<'a> LexiconSchema for ImageData<'a> {
+impl<S: BosStr> LexiconSchema for ImageData<S> {
     fn nsid() -> &'static str {
         "dev.blooym.porxie.getBlobMetadata"
     }
@@ -245,31 +251,35 @@ impl<'a> LexiconSchema for ImageData<'a> {
     }
 }
 
-/// Response type for dev.blooym.porxie.getBlobMetadata
+/** Response marker for the `dev.blooym.porxie.getBlobMetadata` query.
+
+Implements `jacquard_common::xrpc::XrpcResp`; successful bodies decode as `Self::Output<S>`, which is `GetBlobMetadataOutput<S>` for this endpoint.*/
 pub struct GetBlobMetadataResponse;
 impl jacquard_common::xrpc::XrpcResp for GetBlobMetadataResponse {
     const NSID: &'static str = "dev.blooym.porxie.getBlobMetadata";
     const ENCODING: &'static str = "application/json";
-    type Output<'de> = GetBlobMetadataOutput<'de>;
-    type Err<'de> = GetBlobMetadataError<'de>;
+    type Output<S: BosStr> = GetBlobMetadataOutput<S>;
+    type Err = GetBlobMetadataError;
 }
 
-impl<'a> jacquard_common::xrpc::XrpcRequest for GetBlobMetadata<'a> {
+impl<S: BosStr> jacquard_common::xrpc::XrpcRequest for GetBlobMetadata<S> {
     const NSID: &'static str = "dev.blooym.porxie.getBlobMetadata";
     const METHOD: jacquard_common::xrpc::XrpcMethod = jacquard_common::xrpc::XrpcMethod::Query;
     type Response = GetBlobMetadataResponse;
 }
 
-/// Endpoint type for dev.blooym.porxie.getBlobMetadata
+/** Endpoint marker for the `dev.blooym.porxie.getBlobMetadata` query.
+
+Path: `/xrpc/dev.blooym.porxie.getBlobMetadata`. The request payload type is `GetBlobMetadata<S>`; send that request with `jacquard::Client` or use this marker through lower-level `XrpcEndpoint` APIs.*/
 pub struct GetBlobMetadataRequest;
 impl jacquard_common::xrpc::XrpcEndpoint for GetBlobMetadataRequest {
     const PATH: &'static str = "/xrpc/dev.blooym.porxie.getBlobMetadata";
     const METHOD: jacquard_common::xrpc::XrpcMethod = jacquard_common::xrpc::XrpcMethod::Query;
-    type Request<'de> = GetBlobMetadata<'de>;
+    type Request<S: BosStr> = GetBlobMetadata<S>;
     type Response = GetBlobMetadataResponse;
 }
 
-impl<'a> LexiconSchema for VideoData<'a> {
+impl<S: BosStr> LexiconSchema for VideoData<S> {
     fn nsid() -> &'static str {
         "dev.blooym.porxie.getBlobMetadata"
     }
@@ -304,125 +314,140 @@ pub mod aspect_ratio_state {
     }
     /// State trait tracking which required fields have been set
     pub trait State: sealed::Sealed {
-        type Width;
         type Height;
+        type Width;
     }
     /// Empty state - all required fields are unset
     pub struct Empty(());
     impl sealed::Sealed for Empty {}
     impl State for Empty {
-        type Width = Unset;
         type Height = Unset;
-    }
-    ///State transition - sets the `width` field to Set
-    pub struct SetWidth<S: State = Empty>(PhantomData<fn() -> S>);
-    impl<S: State> sealed::Sealed for SetWidth<S> {}
-    impl<S: State> State for SetWidth<S> {
-        type Width = Set<members::width>;
-        type Height = S::Height;
+        type Width = Unset;
     }
     ///State transition - sets the `height` field to Set
-    pub struct SetHeight<S: State = Empty>(PhantomData<fn() -> S>);
-    impl<S: State> sealed::Sealed for SetHeight<S> {}
-    impl<S: State> State for SetHeight<S> {
-        type Width = S::Width;
+    pub struct SetHeight<St: State = Empty>(PhantomData<fn() -> St>);
+    impl<St: State> sealed::Sealed for SetHeight<St> {}
+    impl<St: State> State for SetHeight<St> {
         type Height = Set<members::height>;
+        type Width = St::Width;
+    }
+    ///State transition - sets the `width` field to Set
+    pub struct SetWidth<St: State = Empty>(PhantomData<fn() -> St>);
+    impl<St: State> sealed::Sealed for SetWidth<St> {}
+    impl<St: State> State for SetWidth<St> {
+        type Height = St::Height;
+        type Width = Set<members::width>;
     }
     /// Marker types for field names
     #[allow(non_camel_case_types)]
     pub mod members {
-        ///Marker type for the `width` field
-        pub struct width(());
         ///Marker type for the `height` field
         pub struct height(());
+        ///Marker type for the `width` field
+        pub struct width(());
     }
 }
 
-/// Builder for constructing an instance of this type
-pub struct AspectRatioBuilder<'a, S: aspect_ratio_state::State> {
-    _state: PhantomData<fn() -> S>,
+/// Builder for constructing an instance of this type.
+pub struct AspectRatioBuilder<St: aspect_ratio_state::State, S: BosStr = DefaultStr> {
+    _state: PhantomData<fn() -> St>,
     _fields: (Option<i64>, Option<i64>),
-    _lifetime: PhantomData<&'a ()>,
+    _type: PhantomData<fn() -> S>,
 }
 
-impl<'a> AspectRatio<'a> {
-    /// Create a new builder for this type
-    pub fn new() -> AspectRatioBuilder<'a, aspect_ratio_state::Empty> {
+impl AspectRatio<DefaultStr> {
+    /// Create a new builder for this type, using the default string type (DefaultStr = SmolStr) if needed
+    pub fn new() -> AspectRatioBuilder<aspect_ratio_state::Empty, DefaultStr> {
         AspectRatioBuilder::new()
     }
 }
 
-impl<'a> AspectRatioBuilder<'a, aspect_ratio_state::Empty> {
-    /// Create a new builder with all fields unset
+impl<S: BosStr> AspectRatio<S> {
+    /// Create a new builder for this type
+    pub fn builder() -> AspectRatioBuilder<aspect_ratio_state::Empty, S> {
+        AspectRatioBuilder::builder()
+    }
+}
+
+impl AspectRatioBuilder<aspect_ratio_state::Empty, DefaultStr> {
+    /// Create a new builder with all fields unset, using the default string type, if needed
     pub fn new() -> Self {
         AspectRatioBuilder {
             _state: PhantomData,
             _fields: (None, None),
-            _lifetime: PhantomData,
+            _type: PhantomData,
         }
     }
 }
 
-impl<'a, S> AspectRatioBuilder<'a, S>
+impl<S: BosStr> AspectRatioBuilder<aspect_ratio_state::Empty, S> {
+    /// Create a new builder with all fields unset
+    pub fn builder() -> Self {
+        AspectRatioBuilder {
+            _state: PhantomData,
+            _fields: (None, None),
+            _type: PhantomData,
+        }
+    }
+}
+
+impl<St, S: BosStr> AspectRatioBuilder<St, S>
 where
-    S: aspect_ratio_state::State,
-    S::Height: aspect_ratio_state::IsUnset,
+    St: aspect_ratio_state::State,
+    St::Height: aspect_ratio_state::IsUnset,
 {
     /// Set the `height` field (required)
     pub fn height(
         mut self,
         value: impl Into<i64>,
-    ) -> AspectRatioBuilder<'a, aspect_ratio_state::SetHeight<S>> {
+    ) -> AspectRatioBuilder<aspect_ratio_state::SetHeight<St>, S> {
         self._fields.0 = Option::Some(value.into());
         AspectRatioBuilder {
             _state: PhantomData,
             _fields: self._fields,
-            _lifetime: PhantomData,
+            _type: PhantomData,
         }
     }
 }
 
-impl<'a, S> AspectRatioBuilder<'a, S>
+impl<St, S: BosStr> AspectRatioBuilder<St, S>
 where
-    S: aspect_ratio_state::State,
-    S::Width: aspect_ratio_state::IsUnset,
+    St: aspect_ratio_state::State,
+    St::Width: aspect_ratio_state::IsUnset,
 {
     /// Set the `width` field (required)
     pub fn width(
         mut self,
         value: impl Into<i64>,
-    ) -> AspectRatioBuilder<'a, aspect_ratio_state::SetWidth<S>> {
+    ) -> AspectRatioBuilder<aspect_ratio_state::SetWidth<St>, S> {
         self._fields.1 = Option::Some(value.into());
         AspectRatioBuilder {
             _state: PhantomData,
             _fields: self._fields,
-            _lifetime: PhantomData,
+            _type: PhantomData,
         }
     }
 }
 
-impl<'a, S> AspectRatioBuilder<'a, S>
+impl<St, S: BosStr> AspectRatioBuilder<St, S>
 where
-    S: aspect_ratio_state::State,
-    S::Width: aspect_ratio_state::IsSet,
-    S::Height: aspect_ratio_state::IsSet,
+    St: aspect_ratio_state::State,
+    St::Height: aspect_ratio_state::IsSet,
+    St::Width: aspect_ratio_state::IsSet,
 {
-    /// Build the final struct
-    pub fn build(self) -> AspectRatio<'a> {
+    /// Build the final struct.
+    pub fn build(self) -> AspectRatio<S> {
         AspectRatio {
             height: self._fields.0.unwrap(),
             width: self._fields.1.unwrap(),
             extra_data: Default::default(),
         }
     }
-    /// Build the final struct with custom extra_data
+    /// Build the final struct with custom extra_data.
     pub fn build_with_data(
         self,
-        extra_data: BTreeMap<
-            jacquard_common::deps::smol_str::SmolStr,
-            jacquard_common::types::value::Data<'a>,
-        >,
-    ) -> AspectRatio<'a> {
+        extra_data: BTreeMap<SmolStr, Data<S>>,
+    ) -> AspectRatio<S> {
         AspectRatio {
             height: self._fields.0.unwrap(),
             width: self._fields.1.unwrap(),
@@ -577,9 +602,9 @@ pub mod image_data_state {
         type AspectRatio = Unset;
     }
     ///State transition - sets the `aspect_ratio` field to Set
-    pub struct SetAspectRatio<S: State = Empty>(PhantomData<fn() -> S>);
-    impl<S: State> sealed::Sealed for SetAspectRatio<S> {}
-    impl<S: State> State for SetAspectRatio<S> {
+    pub struct SetAspectRatio<St: State = Empty>(PhantomData<fn() -> St>);
+    impl<St: State> sealed::Sealed for SetAspectRatio<St> {}
+    impl<St: State> State for SetAspectRatio<St> {
         type AspectRatio = Set<members::aspect_ratio>;
     }
     /// Marker types for field names
@@ -590,70 +615,85 @@ pub mod image_data_state {
     }
 }
 
-/// Builder for constructing an instance of this type
-pub struct ImageDataBuilder<'a, S: image_data_state::State> {
-    _state: PhantomData<fn() -> S>,
-    _fields: (Option<get_blob_metadata::AspectRatio<'a>>,),
-    _lifetime: PhantomData<&'a ()>,
+/// Builder for constructing an instance of this type.
+pub struct ImageDataBuilder<St: image_data_state::State, S: BosStr = DefaultStr> {
+    _state: PhantomData<fn() -> St>,
+    _fields: (Option<get_blob_metadata::AspectRatio<S>>,),
+    _type: PhantomData<fn() -> S>,
 }
 
-impl<'a> ImageData<'a> {
-    /// Create a new builder for this type
-    pub fn new() -> ImageDataBuilder<'a, image_data_state::Empty> {
+impl ImageData<DefaultStr> {
+    /// Create a new builder for this type, using the default string type (DefaultStr = SmolStr) if needed
+    pub fn new() -> ImageDataBuilder<image_data_state::Empty, DefaultStr> {
         ImageDataBuilder::new()
     }
 }
 
-impl<'a> ImageDataBuilder<'a, image_data_state::Empty> {
-    /// Create a new builder with all fields unset
+impl<S: BosStr> ImageData<S> {
+    /// Create a new builder for this type
+    pub fn builder() -> ImageDataBuilder<image_data_state::Empty, S> {
+        ImageDataBuilder::builder()
+    }
+}
+
+impl ImageDataBuilder<image_data_state::Empty, DefaultStr> {
+    /// Create a new builder with all fields unset, using the default string type, if needed
     pub fn new() -> Self {
         ImageDataBuilder {
             _state: PhantomData,
             _fields: (None,),
-            _lifetime: PhantomData,
+            _type: PhantomData,
         }
     }
 }
 
-impl<'a, S> ImageDataBuilder<'a, S>
+impl<S: BosStr> ImageDataBuilder<image_data_state::Empty, S> {
+    /// Create a new builder with all fields unset
+    pub fn builder() -> Self {
+        ImageDataBuilder {
+            _state: PhantomData,
+            _fields: (None,),
+            _type: PhantomData,
+        }
+    }
+}
+
+impl<St, S: BosStr> ImageDataBuilder<St, S>
 where
-    S: image_data_state::State,
-    S::AspectRatio: image_data_state::IsUnset,
+    St: image_data_state::State,
+    St::AspectRatio: image_data_state::IsUnset,
 {
     /// Set the `aspectRatio` field (required)
     pub fn aspect_ratio(
         mut self,
-        value: impl Into<get_blob_metadata::AspectRatio<'a>>,
-    ) -> ImageDataBuilder<'a, image_data_state::SetAspectRatio<S>> {
+        value: impl Into<get_blob_metadata::AspectRatio<S>>,
+    ) -> ImageDataBuilder<image_data_state::SetAspectRatio<St>, S> {
         self._fields.0 = Option::Some(value.into());
         ImageDataBuilder {
             _state: PhantomData,
             _fields: self._fields,
-            _lifetime: PhantomData,
+            _type: PhantomData,
         }
     }
 }
 
-impl<'a, S> ImageDataBuilder<'a, S>
+impl<St, S: BosStr> ImageDataBuilder<St, S>
 where
-    S: image_data_state::State,
-    S::AspectRatio: image_data_state::IsSet,
+    St: image_data_state::State,
+    St::AspectRatio: image_data_state::IsSet,
 {
-    /// Build the final struct
-    pub fn build(self) -> ImageData<'a> {
+    /// Build the final struct.
+    pub fn build(self) -> ImageData<S> {
         ImageData {
             aspect_ratio: self._fields.0.unwrap(),
             extra_data: Default::default(),
         }
     }
-    /// Build the final struct with custom extra_data
+    /// Build the final struct with custom extra_data.
     pub fn build_with_data(
         self,
-        extra_data: BTreeMap<
-            jacquard_common::deps::smol_str::SmolStr,
-            jacquard_common::types::value::Data<'a>,
-        >,
-    ) -> ImageData<'a> {
+        extra_data: BTreeMap<SmolStr, Data<S>>,
+    ) -> ImageData<S> {
         ImageData {
             aspect_ratio: self._fields.0.unwrap(),
             extra_data: Some(extra_data),
@@ -671,111 +711,132 @@ pub mod get_blob_metadata_state {
     }
     /// State trait tracking which required fields have been set
     pub trait State: sealed::Sealed {
-        type Did;
         type Cid;
+        type Did;
     }
     /// Empty state - all required fields are unset
     pub struct Empty(());
     impl sealed::Sealed for Empty {}
     impl State for Empty {
-        type Did = Unset;
         type Cid = Unset;
-    }
-    ///State transition - sets the `did` field to Set
-    pub struct SetDid<S: State = Empty>(PhantomData<fn() -> S>);
-    impl<S: State> sealed::Sealed for SetDid<S> {}
-    impl<S: State> State for SetDid<S> {
-        type Did = Set<members::did>;
-        type Cid = S::Cid;
+        type Did = Unset;
     }
     ///State transition - sets the `cid` field to Set
-    pub struct SetCid<S: State = Empty>(PhantomData<fn() -> S>);
-    impl<S: State> sealed::Sealed for SetCid<S> {}
-    impl<S: State> State for SetCid<S> {
-        type Did = S::Did;
+    pub struct SetCid<St: State = Empty>(PhantomData<fn() -> St>);
+    impl<St: State> sealed::Sealed for SetCid<St> {}
+    impl<St: State> State for SetCid<St> {
         type Cid = Set<members::cid>;
+        type Did = St::Did;
+    }
+    ///State transition - sets the `did` field to Set
+    pub struct SetDid<St: State = Empty>(PhantomData<fn() -> St>);
+    impl<St: State> sealed::Sealed for SetDid<St> {}
+    impl<St: State> State for SetDid<St> {
+        type Cid = St::Cid;
+        type Did = Set<members::did>;
     }
     /// Marker types for field names
     #[allow(non_camel_case_types)]
     pub mod members {
-        ///Marker type for the `did` field
-        pub struct did(());
         ///Marker type for the `cid` field
         pub struct cid(());
+        ///Marker type for the `did` field
+        pub struct did(());
     }
 }
 
-/// Builder for constructing an instance of this type
-pub struct GetBlobMetadataBuilder<'a, S: get_blob_metadata_state::State> {
-    _state: PhantomData<fn() -> S>,
-    _fields: (Option<Cid<'a>>, Option<Did<'a>>),
-    _lifetime: PhantomData<&'a ()>,
+/// Builder for constructing an instance of this type.
+pub struct GetBlobMetadataBuilder<
+    St: get_blob_metadata_state::State,
+    S: BosStr = DefaultStr,
+> {
+    _state: PhantomData<fn() -> St>,
+    _fields: (Option<Cid<S>>, Option<Did<S>>),
+    _type: PhantomData<fn() -> S>,
 }
 
-impl<'a> GetBlobMetadata<'a> {
-    /// Create a new builder for this type
-    pub fn new() -> GetBlobMetadataBuilder<'a, get_blob_metadata_state::Empty> {
+impl GetBlobMetadata<DefaultStr> {
+    /// Create a new builder for this type, using the default string type (DefaultStr = SmolStr) if needed
+    pub fn new() -> GetBlobMetadataBuilder<get_blob_metadata_state::Empty, DefaultStr> {
         GetBlobMetadataBuilder::new()
     }
 }
 
-impl<'a> GetBlobMetadataBuilder<'a, get_blob_metadata_state::Empty> {
-    /// Create a new builder with all fields unset
+impl<S: BosStr> GetBlobMetadata<S> {
+    /// Create a new builder for this type
+    pub fn builder() -> GetBlobMetadataBuilder<get_blob_metadata_state::Empty, S> {
+        GetBlobMetadataBuilder::builder()
+    }
+}
+
+impl GetBlobMetadataBuilder<get_blob_metadata_state::Empty, DefaultStr> {
+    /// Create a new builder with all fields unset, using the default string type, if needed
     pub fn new() -> Self {
         GetBlobMetadataBuilder {
             _state: PhantomData,
             _fields: (None, None),
-            _lifetime: PhantomData,
+            _type: PhantomData,
         }
     }
 }
 
-impl<'a, S> GetBlobMetadataBuilder<'a, S>
+impl<S: BosStr> GetBlobMetadataBuilder<get_blob_metadata_state::Empty, S> {
+    /// Create a new builder with all fields unset
+    pub fn builder() -> Self {
+        GetBlobMetadataBuilder {
+            _state: PhantomData,
+            _fields: (None, None),
+            _type: PhantomData,
+        }
+    }
+}
+
+impl<St, S: BosStr> GetBlobMetadataBuilder<St, S>
 where
-    S: get_blob_metadata_state::State,
-    S::Cid: get_blob_metadata_state::IsUnset,
+    St: get_blob_metadata_state::State,
+    St::Cid: get_blob_metadata_state::IsUnset,
 {
     /// Set the `cid` field (required)
     pub fn cid(
         mut self,
-        value: impl Into<Cid<'a>>,
-    ) -> GetBlobMetadataBuilder<'a, get_blob_metadata_state::SetCid<S>> {
+        value: impl Into<Cid<S>>,
+    ) -> GetBlobMetadataBuilder<get_blob_metadata_state::SetCid<St>, S> {
         self._fields.0 = Option::Some(value.into());
         GetBlobMetadataBuilder {
             _state: PhantomData,
             _fields: self._fields,
-            _lifetime: PhantomData,
+            _type: PhantomData,
         }
     }
 }
 
-impl<'a, S> GetBlobMetadataBuilder<'a, S>
+impl<St, S: BosStr> GetBlobMetadataBuilder<St, S>
 where
-    S: get_blob_metadata_state::State,
-    S::Did: get_blob_metadata_state::IsUnset,
+    St: get_blob_metadata_state::State,
+    St::Did: get_blob_metadata_state::IsUnset,
 {
     /// Set the `did` field (required)
     pub fn did(
         mut self,
-        value: impl Into<Did<'a>>,
-    ) -> GetBlobMetadataBuilder<'a, get_blob_metadata_state::SetDid<S>> {
+        value: impl Into<Did<S>>,
+    ) -> GetBlobMetadataBuilder<get_blob_metadata_state::SetDid<St>, S> {
         self._fields.1 = Option::Some(value.into());
         GetBlobMetadataBuilder {
             _state: PhantomData,
             _fields: self._fields,
-            _lifetime: PhantomData,
+            _type: PhantomData,
         }
     }
 }
 
-impl<'a, S> GetBlobMetadataBuilder<'a, S>
+impl<St, S: BosStr> GetBlobMetadataBuilder<St, S>
 where
-    S: get_blob_metadata_state::State,
-    S::Did: get_blob_metadata_state::IsSet,
-    S::Cid: get_blob_metadata_state::IsSet,
+    St: get_blob_metadata_state::State,
+    St::Cid: get_blob_metadata_state::IsSet,
+    St::Did: get_blob_metadata_state::IsSet,
 {
-    /// Build the final struct
-    pub fn build(self) -> GetBlobMetadata<'a> {
+    /// Build the final struct.
+    pub fn build(self) -> GetBlobMetadata<S> {
         GetBlobMetadata {
             cid: self._fields.0.unwrap(),
             did: self._fields.1.unwrap(),
@@ -793,125 +854,140 @@ pub mod video_data_state {
     }
     /// State trait tracking which required fields have been set
     pub trait State: sealed::Sealed {
-        type DurationMs;
         type AspectRatio;
+        type DurationMs;
     }
     /// Empty state - all required fields are unset
     pub struct Empty(());
     impl sealed::Sealed for Empty {}
     impl State for Empty {
-        type DurationMs = Unset;
         type AspectRatio = Unset;
-    }
-    ///State transition - sets the `duration_ms` field to Set
-    pub struct SetDurationMs<S: State = Empty>(PhantomData<fn() -> S>);
-    impl<S: State> sealed::Sealed for SetDurationMs<S> {}
-    impl<S: State> State for SetDurationMs<S> {
-        type DurationMs = Set<members::duration_ms>;
-        type AspectRatio = S::AspectRatio;
+        type DurationMs = Unset;
     }
     ///State transition - sets the `aspect_ratio` field to Set
-    pub struct SetAspectRatio<S: State = Empty>(PhantomData<fn() -> S>);
-    impl<S: State> sealed::Sealed for SetAspectRatio<S> {}
-    impl<S: State> State for SetAspectRatio<S> {
-        type DurationMs = S::DurationMs;
+    pub struct SetAspectRatio<St: State = Empty>(PhantomData<fn() -> St>);
+    impl<St: State> sealed::Sealed for SetAspectRatio<St> {}
+    impl<St: State> State for SetAspectRatio<St> {
         type AspectRatio = Set<members::aspect_ratio>;
+        type DurationMs = St::DurationMs;
+    }
+    ///State transition - sets the `duration_ms` field to Set
+    pub struct SetDurationMs<St: State = Empty>(PhantomData<fn() -> St>);
+    impl<St: State> sealed::Sealed for SetDurationMs<St> {}
+    impl<St: State> State for SetDurationMs<St> {
+        type AspectRatio = St::AspectRatio;
+        type DurationMs = Set<members::duration_ms>;
     }
     /// Marker types for field names
     #[allow(non_camel_case_types)]
     pub mod members {
-        ///Marker type for the `duration_ms` field
-        pub struct duration_ms(());
         ///Marker type for the `aspect_ratio` field
         pub struct aspect_ratio(());
+        ///Marker type for the `duration_ms` field
+        pub struct duration_ms(());
     }
 }
 
-/// Builder for constructing an instance of this type
-pub struct VideoDataBuilder<'a, S: video_data_state::State> {
-    _state: PhantomData<fn() -> S>,
-    _fields: (Option<get_blob_metadata::AspectRatio<'a>>, Option<i64>),
-    _lifetime: PhantomData<&'a ()>,
+/// Builder for constructing an instance of this type.
+pub struct VideoDataBuilder<St: video_data_state::State, S: BosStr = DefaultStr> {
+    _state: PhantomData<fn() -> St>,
+    _fields: (Option<get_blob_metadata::AspectRatio<S>>, Option<i64>),
+    _type: PhantomData<fn() -> S>,
 }
 
-impl<'a> VideoData<'a> {
-    /// Create a new builder for this type
-    pub fn new() -> VideoDataBuilder<'a, video_data_state::Empty> {
+impl VideoData<DefaultStr> {
+    /// Create a new builder for this type, using the default string type (DefaultStr = SmolStr) if needed
+    pub fn new() -> VideoDataBuilder<video_data_state::Empty, DefaultStr> {
         VideoDataBuilder::new()
     }
 }
 
-impl<'a> VideoDataBuilder<'a, video_data_state::Empty> {
-    /// Create a new builder with all fields unset
+impl<S: BosStr> VideoData<S> {
+    /// Create a new builder for this type
+    pub fn builder() -> VideoDataBuilder<video_data_state::Empty, S> {
+        VideoDataBuilder::builder()
+    }
+}
+
+impl VideoDataBuilder<video_data_state::Empty, DefaultStr> {
+    /// Create a new builder with all fields unset, using the default string type, if needed
     pub fn new() -> Self {
         VideoDataBuilder {
             _state: PhantomData,
             _fields: (None, None),
-            _lifetime: PhantomData,
+            _type: PhantomData,
         }
     }
 }
 
-impl<'a, S> VideoDataBuilder<'a, S>
+impl<S: BosStr> VideoDataBuilder<video_data_state::Empty, S> {
+    /// Create a new builder with all fields unset
+    pub fn builder() -> Self {
+        VideoDataBuilder {
+            _state: PhantomData,
+            _fields: (None, None),
+            _type: PhantomData,
+        }
+    }
+}
+
+impl<St, S: BosStr> VideoDataBuilder<St, S>
 where
-    S: video_data_state::State,
-    S::AspectRatio: video_data_state::IsUnset,
+    St: video_data_state::State,
+    St::AspectRatio: video_data_state::IsUnset,
 {
     /// Set the `aspectRatio` field (required)
     pub fn aspect_ratio(
         mut self,
-        value: impl Into<get_blob_metadata::AspectRatio<'a>>,
-    ) -> VideoDataBuilder<'a, video_data_state::SetAspectRatio<S>> {
+        value: impl Into<get_blob_metadata::AspectRatio<S>>,
+    ) -> VideoDataBuilder<video_data_state::SetAspectRatio<St>, S> {
         self._fields.0 = Option::Some(value.into());
         VideoDataBuilder {
             _state: PhantomData,
             _fields: self._fields,
-            _lifetime: PhantomData,
+            _type: PhantomData,
         }
     }
 }
 
-impl<'a, S> VideoDataBuilder<'a, S>
+impl<St, S: BosStr> VideoDataBuilder<St, S>
 where
-    S: video_data_state::State,
-    S::DurationMs: video_data_state::IsUnset,
+    St: video_data_state::State,
+    St::DurationMs: video_data_state::IsUnset,
 {
     /// Set the `durationMs` field (required)
     pub fn duration_ms(
         mut self,
         value: impl Into<i64>,
-    ) -> VideoDataBuilder<'a, video_data_state::SetDurationMs<S>> {
+    ) -> VideoDataBuilder<video_data_state::SetDurationMs<St>, S> {
         self._fields.1 = Option::Some(value.into());
         VideoDataBuilder {
             _state: PhantomData,
             _fields: self._fields,
-            _lifetime: PhantomData,
+            _type: PhantomData,
         }
     }
 }
 
-impl<'a, S> VideoDataBuilder<'a, S>
+impl<St, S: BosStr> VideoDataBuilder<St, S>
 where
-    S: video_data_state::State,
-    S::DurationMs: video_data_state::IsSet,
-    S::AspectRatio: video_data_state::IsSet,
+    St: video_data_state::State,
+    St::AspectRatio: video_data_state::IsSet,
+    St::DurationMs: video_data_state::IsSet,
 {
-    /// Build the final struct
-    pub fn build(self) -> VideoData<'a> {
+    /// Build the final struct.
+    pub fn build(self) -> VideoData<S> {
         VideoData {
             aspect_ratio: self._fields.0.unwrap(),
             duration_ms: self._fields.1.unwrap(),
             extra_data: Default::default(),
         }
     }
-    /// Build the final struct with custom extra_data
+    /// Build the final struct with custom extra_data.
     pub fn build_with_data(
         self,
-        extra_data: BTreeMap<
-            jacquard_common::deps::smol_str::SmolStr,
-            jacquard_common::types::value::Data<'a>,
-        >,
-    ) -> VideoData<'a> {
+        extra_data: BTreeMap<SmolStr, Data<S>>,
+    ) -> VideoData<S> {
         VideoData {
             aspect_ratio: self._fields.0.unwrap(),
             duration_ms: self._fields.1.unwrap(),

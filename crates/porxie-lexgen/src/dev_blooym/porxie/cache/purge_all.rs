@@ -10,28 +10,39 @@ use alloc::collections::BTreeMap;
 
 #[allow(unused_imports)]
 use core::marker::PhantomData;
-use jacquard_derive::{IntoStatic, lexicon};
+use jacquard_common::{BosStr, DefaultStr, FromStaticStr};
+use jacquard_common::deps::smol_str::SmolStr;
+use jacquard_common::types::value::Data;
+use jacquard_derive::IntoStatic;
 use serde::{Serialize, Deserialize};
 
-#[lexicon]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct PurgeAll<'a> {}
+#[serde(rename_all = "camelCase", bound(deserialize = "S: Deserialize<'de> + BosStr"))]
+pub struct PurgeAll<S: BosStr = DefaultStr> {
+    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+    pub extra_data: Option<BTreeMap<SmolStr, Data<S>>>,
+}
 
-#[lexicon]
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, IntoStatic, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct PurgeAllOutput<'a> {}
-/// Response type for dev.blooym.porxie.cache.purgeAll
+#[serde(rename_all = "camelCase", bound(deserialize = "S: Deserialize<'de> + BosStr"))]
+pub struct PurgeAllOutput<S: BosStr = DefaultStr> {
+    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+    pub extra_data: Option<BTreeMap<SmolStr, Data<S>>>,
+}
+
+/** Response marker for the `dev.blooym.porxie.cache.purgeAll` procedure.
+
+Implements `jacquard_common::xrpc::XrpcResp`; successful bodies decode as `Self::Output<S>`, which is `PurgeAllOutput<S>` for this endpoint.*/
 pub struct PurgeAllResponse;
 impl jacquard_common::xrpc::XrpcResp for PurgeAllResponse {
     const NSID: &'static str = "dev.blooym.porxie.cache.purgeAll";
     const ENCODING: &'static str = "application/json";
-    type Output<'de> = PurgeAllOutput<'de>;
-    type Err<'de> = jacquard_common::xrpc::GenericError<'de>;
+    type Output<S: BosStr> = PurgeAllOutput<S>;
+    type Err = jacquard_common::xrpc::GenericError;
 }
 
-impl<'a> jacquard_common::xrpc::XrpcRequest for PurgeAll<'a> {
+impl<S: BosStr> jacquard_common::xrpc::XrpcRequest for PurgeAll<S> {
     const NSID: &'static str = "dev.blooym.porxie.cache.purgeAll";
     const METHOD: jacquard_common::xrpc::XrpcMethod = jacquard_common::xrpc::XrpcMethod::Procedure(
         "application/json",
@@ -39,13 +50,15 @@ impl<'a> jacquard_common::xrpc::XrpcRequest for PurgeAll<'a> {
     type Response = PurgeAllResponse;
 }
 
-/// Endpoint type for dev.blooym.porxie.cache.purgeAll
+/** Endpoint marker for the `dev.blooym.porxie.cache.purgeAll` procedure.
+
+Path: `/xrpc/dev.blooym.porxie.cache.purgeAll`. The request payload type is `PurgeAll<S>`; send that request with `jacquard::Client` or use this marker through lower-level `XrpcEndpoint` APIs.*/
 pub struct PurgeAllRequest;
 impl jacquard_common::xrpc::XrpcEndpoint for PurgeAllRequest {
     const PATH: &'static str = "/xrpc/dev.blooym.porxie.cache.purgeAll";
     const METHOD: jacquard_common::xrpc::XrpcMethod = jacquard_common::xrpc::XrpcMethod::Procedure(
         "application/json",
     );
-    type Request<'de> = PurgeAll<'de>;
+    type Request<S: BosStr> = PurgeAll<S>;
     type Response = PurgeAllResponse;
 }

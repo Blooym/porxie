@@ -11,11 +11,8 @@ use axum::{
     http::{HeaderName, HeaderValue, StatusCode, header},
     response::Response,
 };
-use jacquard_common::{
-    types::did::Did,
-    xrpc::{GenericXrpcError, XrpcError, XrpcRequest},
-};
-use porxie_lexgen::dev_blooym::porxie::get_blob::{GetBlob, GetBlobError};
+use jacquard_common::{SmolStr, types::did::Did, xrpc::XrpcError};
+use porxie_lexgen::dev_blooym::porxie::get_blob::GetBlobError;
 use std::sync::Arc;
 
 /// Fetch a blob from a given upstream and return it.
@@ -27,7 +24,7 @@ pub async fn get_blob_handler(
     (
         StatusCode,
         [(HeaderName, &'static str); 1],
-        Json<XrpcError<GetBlobError<'static>>>,
+        Json<XrpcError<GetBlobError>>,
     ),
 > {
     let (did, cid) = (
@@ -74,12 +71,9 @@ pub async fn get_blob_handler(
                     return Err((
                         StatusCode::INTERNAL_SERVER_ERROR,
                         [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
-                        Json(XrpcError::Generic(GenericXrpcError {
-                            error: "InternalServerError".into(),
-                            http_status: StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(XrpcError::Xrpc(GetBlobError::Other {
+                            error: SmolStr::new_static("InternalServerError"),
                             message: None,
-                            method: GetBlob::METHOD.as_str(),
-                            nsid: GetBlob::NSID,
                         })),
                     ));
                 }
