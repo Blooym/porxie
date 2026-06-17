@@ -10,14 +10,10 @@ use axum::{
     http::{HeaderName, HeaderValue, StatusCode, header},
 };
 use jacquard_axum::ExtractXrpc;
-use jacquard_common::{
-    IntoStatic,
-    cowstr::ToCowStr,
-    xrpc::{GenericXrpcError, XrpcError, XrpcRequest},
-};
+use jacquard_common::{SmolStr, ToSmolStr, xrpc::XrpcError};
 use porxie_lexgen::dev_blooym::porxie::get_blob_metadata::{
-    AspectRatio, GetBlobMetadata, GetBlobMetadataError, GetBlobMetadataOutput,
-    GetBlobMetadataOutputData, GetBlobMetadataRequest, ImageData, VideoData,
+    AspectRatio, GetBlobMetadataError, GetBlobMetadataOutput, GetBlobMetadataOutputData,
+    GetBlobMetadataRequest, ImageData, VideoData,
 };
 use porxie_mediautil::{
     deps::mime,
@@ -29,14 +25,11 @@ pub async fn xrpc_get_blob_metadata_handler(
     state: State<Arc<ServerState>>,
     ExtractXrpc(request): ExtractXrpc<GetBlobMetadataRequest>,
 ) -> Result<
-    (
-        [(HeaderName, HeaderValue); 1],
-        Json<GetBlobMetadataOutput<'static>>,
-    ),
+    ([(HeaderName, HeaderValue); 1], Json<GetBlobMetadataOutput>),
     (
         StatusCode,
         [(HeaderName, &'static str); 1],
-        Json<XrpcError<GetBlobMetadataError<'static>>>,
+        Json<XrpcError<GetBlobMetadataError>>,
     ),
 > {
     let cid = BlobCid::try_from(request.cid.as_str()).map_err(|_| {
@@ -67,12 +60,9 @@ pub async fn xrpc_get_blob_metadata_handler(
                     return Err((
                         StatusCode::INTERNAL_SERVER_ERROR,
                         [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
-                        Json(XrpcError::Generic(GenericXrpcError {
-                            error: "InternalServerError".into(),
-                            http_status: StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(XrpcError::Xrpc(GetBlobMetadataError::Other {
+                            error: SmolStr::new_static("InternalServerError"),
                             message: None,
-                            method: GetBlobMetadata::METHOD.as_str(),
-                            nsid: GetBlobMetadata::NSID,
                         })),
                     ));
                 }
@@ -226,7 +216,7 @@ pub async fn xrpc_get_blob_metadata_handler(
         [(header::CACHE_CONTROL, state.cache_control_header.clone())],
         Json(GetBlobMetadataOutput {
             size: blob.bytes.len() as i64,
-            content_type: Some(blob.mime_type.essence_str().to_cowstr().into_static()),
+            content_type: Some(blob.mime_type.essence_str().to_smolstr()),
             data: format_metadata,
             extra_data: None,
         }),

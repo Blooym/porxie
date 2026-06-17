@@ -274,7 +274,8 @@ struct PolicyServiceArgs {
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
-    json_subscriber::fmt()
+    tracing_subscriber::fmt()
+        .json()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new("info")))
         .init();
     let args = AppArgs::parse();

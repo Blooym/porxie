@@ -108,7 +108,7 @@ pub struct BlobService {
     data_cache: MokaCache<BlobCid, BlobData>,
     http_client: reqwest::Client,
     max_blob_size: NonZeroU64,
-    ownership_cache: MokaCache<(BlobCid, Did<'static>), ()>,
+    ownership_cache: MokaCache<(BlobCid, Did), ()>,
 }
 
 impl BlobService {
@@ -140,7 +140,7 @@ impl BlobService {
                 .time_to_idle(options.data_cache_tti)
                 .weigher(|_key, value| value.bytes.len().try_into().unwrap_or(u32::MAX))
                 .build(),
-            ownership_cache: MokaCache::<(BlobCid, Did<'static>), ()>::builder()
+            ownership_cache: MokaCache::<(BlobCid, Did), ()>::builder()
                 .name("blob-ownership")
                 .eviction_policy(EvictionPolicy::tiny_lfu())
                 .max_capacity(options.ownership_cache_max_capacity)
@@ -179,7 +179,7 @@ impl BlobService {
     #[instrument(skip_all, fields(did = %did, cid = %cid))]
     pub async fn fetch_blob(
         &self,
-        did: &Did<'static>,
+        did: &Did,
         cid: &BlobCid,
         url_resolver: BlobUrlResolver<'_>,
     ) -> Result<BlobData, Arc<BlobDownloadError>> {
@@ -301,7 +301,7 @@ impl BlobService {
     #[instrument(skip_all, fields(did = %did, cid = %cid))]
     pub async fn fetch_blob_ownership(
         &self,
-        did: &Did<'static>,
+        did: &Did,
         cid: BlobCid,
         url_resolver: BlobUrlResolver<'_>,
     ) -> Result<(), Arc<BlobOwnershipError>> {
@@ -370,7 +370,7 @@ impl BlobService {
 
     /// Invalidate ownership cache entries matching the predicate.
     pub fn invalidate_ownership_cache_entries_if<
-        F: Fn(&(BlobCid, Did<'static>), &()) -> bool + Send + Sync + 'static,
+        F: Fn(&(BlobCid, Did), &()) -> bool + Send + Sync + 'static,
     >(
         &self,
         predicate: F,

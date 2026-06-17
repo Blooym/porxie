@@ -32,8 +32,8 @@ pub struct IdentityServiceOptions {
 }
 
 pub struct IdentityService {
-    cache: MokaCache<Did<'static>, Url>,
-    resolver: JacquardResolver,
+    cache: MokaCache<Did, Url>,
+    resolver: JacquardResolver<reqwest::Client>,
 }
 
 impl IdentityService {
@@ -79,7 +79,7 @@ impl IdentityService {
                     ..Default::default()
                 },
             ),
-            cache: MokaCache::<Did<'static>, Url>::builder()
+            cache: MokaCache::<Did, Url>::builder()
                 .name("identity")
                 .eviction_policy(EvictionPolicy::tiny_lfu())
                 .max_capacity(options.cache_memory_allocation)
@@ -97,7 +97,7 @@ impl IdentityService {
     ///
     /// Concurrent requests for the same key are coalesced.
     #[instrument(skip_all, fields(did = %did))]
-    pub async fn pds_for_did(&self, did: &Did<'static>) -> Result<Url, Arc<IdentityError>> {
+    pub async fn pds_for_did(&self, did: &Did) -> Result<Url, Arc<IdentityError>> {
         self.cache
             .try_get_with_by_ref(did, async {
                 let url = Url::parse(self.resolver.pds_for_did(did).await?.as_str())
@@ -116,7 +116,7 @@ impl IdentityService {
     }
 
     /// Invalidate the cache entry for the given DID.
-    pub async fn invalidate_cache_entry(&self, did: &Did<'static>) {
+    pub async fn invalidate_cache_entry(&self, did: &Did) {
         self.cache.invalidate(did).await
     }
 

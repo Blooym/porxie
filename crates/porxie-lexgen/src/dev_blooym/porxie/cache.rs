@@ -3,6 +3,7 @@
 // This file was automatically generated from Lexicon schemas.
 // Any manual changes will be overwritten on the next regeneration.
 
+//! Generated bindings for the `dev.blooym.porxie.cache` Lexicon namespace/module.
 pub mod purge_actor;
 pub mod purge_all;
 pub mod purge_blob;

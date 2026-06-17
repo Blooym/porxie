@@ -15,9 +15,9 @@ unsafe_code = "forbid"
 dev_blooym = []
 
 [dependencies]
-jacquard-common = { version = "0.11.0", default-features = false }
-jacquard-derive = { version = "0.11.0", default-features = false }
-jacquard-lexicon = { version = "0.11.1", default-features = false }
+jacquard-common = { version = "0.12.0", default-features = false }
+jacquard-derive = { version = "0.12.0", default-features = false }
+jacquard-lexicon = { version = "0.12.0", default-features = false }
 miette = { version = "7.6.0", default-features = false }
 serde = { version = "1.0.228", default-features = false }
 thiserror = { version = "2.0.18", default-features = false }

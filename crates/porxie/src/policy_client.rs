@@ -65,7 +65,7 @@ pub struct PolicyClientOptions {
 }
 
 pub struct PolicyClient {
-    cache: MokaCache<(Did<'static>, BlobCid), PolicyDecision>,
+    cache: MokaCache<(Did, BlobCid), PolicyDecision>,
     http_client: reqwest::Client,
     policy_service_req_headers: Vec<(HeaderName, HeaderValue)>,
     policy_service_url: Url,
@@ -86,7 +86,7 @@ impl PolicyClient {
         };
 
         Ok(Self {
-            cache: MokaCache::<(Did<'static>, BlobCid), PolicyDecision>::builder()
+            cache: MokaCache::<(Did, BlobCid), PolicyDecision>::builder()
                 .name("policy")
                 .eviction_policy(EvictionPolicy::tiny_lfu())
                 .max_capacity(options.cache_max_memory_allocation)
@@ -122,7 +122,7 @@ impl PolicyClient {
     #[instrument(skip_all, fields(did = %did, cid = %cid))]
     pub async fn get_policy(
         &self,
-        did: &Did<'static>,
+        did: &Did,
         cid: BlobCid,
     ) -> Result<PolicyDecision, Arc<GetBlobPolicyError>> {
         self.cache
@@ -179,7 +179,7 @@ impl PolicyClient {
 
     /// Invalidate cache entries matching the predicate.
     pub fn invalidate_cache_entries_if<
-        F: Fn(&(Did<'static>, BlobCid), &PolicyDecision) -> bool + Send + Sync + 'static,
+        F: Fn(&(Did, BlobCid), &PolicyDecision) -> bool + Send + Sync + 'static,
     >(
         &self,
         predicate: F,

@@ -27,9 +27,9 @@ image = { version = "0.25.10", optional = true, default-features = false, featur
     "webp",
 ] }
 infer = { version = "0.19.0", default-features = false, features = ["std"] }
-log = { version = "0.4.29", default-features = false }
+log = { version = "0.4.32", default-features = false }
 mime = { version = "0.3.17", default-features = false }
-nom-exif = { version = "3.4.0", optional = true, default-features = false, features = [
+nom-exif = { version = "3.6.1", optional = true, default-features = false, features = [
     "tokio",
 ] }
 thiserror = { version = "2.0.18", default-features = false, features = ["std"] }
