@@ -2159,7 +2159,8 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 [[package]]
 name = "jacquard"
 version = "0.12.0"
-source = "git+https://tangled.org/nonbinary.computer/jacquard?rev=f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80#f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e30d6ba826a563cb2e86f6c4e2268ef5a216b50ea0ca98a9cd3b6b4cbc7c8cc"
 dependencies = [
  "bytes",
  "getrandom 0.2.17",
@@ -2187,7 +2188,8 @@ dependencies = [
 [[package]]
 name = "jacquard-api"
 version = "0.12.0"
-source = "git+https://tangled.org/nonbinary.computer/jacquard?rev=f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80#f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9d7b4d41f44a3add61878f6022c48ef949f5d1759a88ec778017334d2847e95"
 dependencies = [
  "jacquard-common",
  "jacquard-derive",
@@ -2200,7 +2202,8 @@ dependencies = [
 [[package]]
 name = "jacquard-axum"
 version = "0.12.0"
-source = "git+https://tangled.org/nonbinary.computer/jacquard?rev=f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80#f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd1c24e629b32b51477d0217a976e9a16f0397a37bdc8a174225d4d77e3822a0"
 dependencies = [
  "axum",
  "axum-extra 0.10.3",
@@ -2223,7 +2226,8 @@ dependencies = [
 [[package]]
 name = "jacquard-common"
 version = "0.12.0"
-source = "git+https://tangled.org/nonbinary.computer/jacquard?rev=f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80#f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82e9239b4bf08cf6b3e9d9d420be8b17bd09ee34228b52b884089cbcf67d23bf"
 dependencies = [
  "base64",
  "bon",
@@ -2271,7 +2275,8 @@ dependencies = [
 [[package]]
 name = "jacquard-derive"
 version = "0.12.0"
-source = "git+https://tangled.org/nonbinary.computer/jacquard?rev=f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80#f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bea6f33da422d272cb09a2571fb65f88aed13612774f2eb635716ce71d1e742"
 dependencies = [
  "heck",
  "jacquard-lexicon",
@@ -2283,7 +2288,8 @@ dependencies = [
 [[package]]
 name = "jacquard-identity"
 version = "0.12.0"
-source = "git+https://tangled.org/nonbinary.computer/jacquard?rev=f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80#f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "757c2d9d9ecca3b66e000e912f2fcf9e9e63c5dc50d20983264e3a6db56f4a8e"
 dependencies = [
  "bon",
  "bytes",
@@ -2306,7 +2312,8 @@ dependencies = [
 [[package]]
 name = "jacquard-lexicon"
 version = "0.12.0"
-source = "git+https://tangled.org/nonbinary.computer/jacquard?rev=f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80#f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bf8be274eb0af89ece99b56cbbc837748f62d44af8ab8280acafdfcafe84db7"
 dependencies = [
  "cid",
  "dashmap",
@@ -2333,7 +2340,8 @@ dependencies = [
 [[package]]
 name = "jacquard-oauth"
 version = "0.12.0"
-source = "git+https://tangled.org/nonbinary.computer/jacquard?rev=f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80#f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "108570f206eea7fd3272e7bfe355b589d66c163e4e4a06ee612bf84877ef2049"
 dependencies = [
  "base64",
  "bytes",
@@ -2667,7 +2675,8 @@ checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 [[package]]
 name = "mini-moka-wasm"
 version = "0.10.99"
-source = "git+https://tangled.org/nonbinary.computer/jacquard?rev=f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80#f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0102b9a2ad50fa47ca89eead2316c8222285ecfbd3f69ce99564fbe4253866e8"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-utils",

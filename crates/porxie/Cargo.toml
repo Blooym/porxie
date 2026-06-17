@@ -47,11 +47,11 @@ clap = { version = "4.6.1", features = [
 dotenvy = { version = "0.15.7", default-features = false }
 futures-util = { version = "0.3.32", default-features = false }
 humantime = { version = "2.3.0", default-features = false }
-jacquard-axum = { git = "https://tangled.org/nonbinary.computer/jacquard", rev = "f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80", default-features = false, features = [
+jacquard-axum = { version = "0.12.0", default-features = false, features = [
     "tracing",
 ] }
-jacquard-common = { git = "https://tangled.org/nonbinary.computer/jacquard", rev = "f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80", default-features = false }
-jacquard-identity = { git = "https://tangled.org/nonbinary.computer/jacquard", rev = "f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80", features = ["tracing"] }
+jacquard-common = {  version = "0.12.0", default-features = false }
+jacquard-identity = { version = "0.12.0", features = ["tracing"] }
 jemallocator = "0.5.4"
 porxie-lexgen = { path = "../porxie-lexgen", default-features = false, features = [
     "dev_blooym",

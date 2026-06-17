@@ -15,9 +15,9 @@ unsafe_code = "forbid"
 dev_blooym = []
 
 [dependencies]
-jacquard-common = { git = "https://tangled.org/nonbinary.computer/jacquard", rev = "f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80", default-features = false }
-jacquard-derive = { git = "https://tangled.org/nonbinary.computer/jacquard", rev = "f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80", default-features = false }
-jacquard-lexicon = { git = "https://tangled.org/nonbinary.computer/jacquard", rev = "f08d5d10c63495a2b4b0f6366aa3f7c6d9f3ce80", default-features = false }
+jacquard-common = { version = "0.12.0", default-features = false }
+jacquard-derive = { version = "0.12.0", default-features = false }
+jacquard-lexicon = { version = "0.12.0", default-features = false }
 miette = { version = "7.6.0", default-features = false }
 serde = { version = "1.0.228", default-features = false }
 thiserror = { version = "2.0.18", default-features = false }
