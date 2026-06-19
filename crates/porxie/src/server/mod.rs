@@ -21,7 +21,7 @@ use crate::{
                     },
                     xrpc_compat_get_blob_handler, xrpc_get_blob_metadata_handler,
                 },
-                xrpc_fallback_handler, xrpc_get_health_handler,
+                xrpc_fallback_handler, xrpc_get_health_handler, xrpc_nonspec_method_handler,
             },
         },
     },
@@ -112,7 +112,9 @@ impl PorxieServer {
                         post(xrpc_cache_purge_all_handler),
                     )
                     // Ensure /xrpc/... routes don't fall through elsewhere.
-                    .route("/{rest}", any(xrpc_fallback_handler)),
+                    .route("/{rest}", get(xrpc_fallback_handler))
+                    .route("/{rest}", post(xrpc_fallback_handler))
+                    .route("/{rest}", any(xrpc_nonspec_method_handler)),
             )
             .layer(CatchPanicLayer::new())
             .layer(NormalizePathLayer::trim_trailing_slash())

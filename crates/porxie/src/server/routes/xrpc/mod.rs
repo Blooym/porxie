@@ -1,8 +1,19 @@
 pub mod dev_blooym;
-mod health;
 
+mod health;
 pub use health::xrpc_get_health_handler;
 
-pub async fn xrpc_fallback_handler() -> axum::http::StatusCode {
-    axum::http::StatusCode::NOT_IMPLEMENTED
+use jacquard_axum::GenericXrpcErrorResponse;
+use reqwest::StatusCode;
+
+pub async fn xrpc_fallback_handler() -> GenericXrpcErrorResponse {
+    GenericXrpcErrorResponse::new(
+        axum::http::StatusCode::NOT_IMPLEMENTED,
+        "MethodNotImplemented",
+        Some("XRPC Method Not Implemented"),
+    )
+}
+
+pub async fn xrpc_nonspec_method_handler() -> StatusCode {
+    StatusCode::METHOD_NOT_ALLOWED
 }
