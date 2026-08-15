@@ -21,7 +21,8 @@ use crate::{
                     },
                     xrpc_compat_get_blob_handler, xrpc_get_blob_metadata_handler,
                 },
-                xrpc_fallback_handler, xrpc_get_health_handler, xrpc_nonspec_method_handler,
+                xrpc_fallback_handler, xrpc_get_health_handler, xrpc_internal_error_panic_handler,
+                xrpc_nonspec_method_handler,
             },
         },
     },
@@ -116,7 +117,7 @@ impl PorxieServer {
                     .route("/{rest}", post(xrpc_fallback_handler))
                     .route("/{rest}", any(xrpc_nonspec_method_handler)),
             )
-            .layer(CatchPanicLayer::new())
+            .layer(CatchPanicLayer::custom(xrpc_internal_error_panic_handler))
             .layer(NormalizePathLayer::trim_trailing_slash())
             .layer(axum_middleware::from_fn(server_headers_middleware))
             .layer(CorsLayer::permissive())
