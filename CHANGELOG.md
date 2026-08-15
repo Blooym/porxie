@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4] - 2026-07-15
+
+- Updated dependencies to latest versions.
+- XRPC subpaths now correctly return `XrpcNotImplemented` on 404.
+- Panics on all endpoints now return an XRPC-compatiable error format instead of just a HTTP status.
+- All other non-supported XRPC methods now return HTTP 405 instead of HTTP 501. 
+
 ## [0.3.3] - 2026-05-23
 
 - All blob fetch requests will now send the HTTP `Accept` header containing the configured allowed mimetypes.
