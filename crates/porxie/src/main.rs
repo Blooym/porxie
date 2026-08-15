@@ -28,7 +28,7 @@ use tracing_subscriber::EnvFilter;
 //
 // It especially performs a lot better on MUSL (when last benchmarked).
 #[global_allocator]
-static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 #[derive(Parser)]
 #[clap(

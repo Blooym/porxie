@@ -17,7 +17,7 @@ image-metadata = ["image"]
 video-metadata = ["nom-exif"]
 
 [dependencies]
-bytes = { version = "1.11.1", default-features = false }
+bytes = { version = "1.12.1", default-features = false }
 image = { version = "0.25.10", optional = true, default-features = false, features = [
     "avif",
     "gif",
@@ -26,10 +26,10 @@ image = { version = "0.25.10", optional = true, default-features = false, featur
     "png",
     "webp",
 ] }
-infer = { version = "0.19.0", default-features = false, features = ["std"] }
-log = { version = "0.4.32", default-features = false }
+infer = { version = "0.22.0", default-features = false, features = ["std"] }
+log = { version = "0.4.33", default-features = false }
 mime = { version = "0.3.17", default-features = false }
-nom-exif = { version = "3.6.1", optional = true, default-features = false, features = [
+nom-exif = { version = "3.6.2", optional = true, default-features = false, features = [
     "tokio",
 ] }
-thiserror = { version = "2.0.18", default-features = false, features = ["std"] }
+thiserror = { version = "2.0.20", default-features = false, features = ["std"] }

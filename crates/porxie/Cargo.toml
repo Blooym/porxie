@@ -6,7 +6,7 @@ repository = "https://codeberg.org/Blooym/porxie"
 homepage = "https://codeberg.org/Blooym/porxie/src/branch/main/README.md"
 documentation = "https://codeberg.org/Blooym/porxie/src/branch/main/README.md"
 license = "AGPL-3.0-or-later"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2024"
 
 [lints.clippy]
@@ -17,7 +17,7 @@ panic = "deny"
 unsafe_code = "forbid"
 
 [dependencies]
-anyhow = { version = "1.0.102", features = ["std"], default-features = false }
+anyhow = { version = "1.0.104", features = ["std"], default-features = false }
 axum = { version = "0.8.9", features = [
     "http1",
     "http2",
@@ -31,10 +31,10 @@ axum-extra = { version = "0.12.6", features = [
     "typed-header",
     "tracing",
 ], default-features = false }
-bytes = { version = "1.11.1", features = ["std"], default-features = false }
-bytesize = { version = "2.4.0", features = ["std"], default-features = false }
+bytes = { version = "1.12.1", features = ["std"], default-features = false }
+bytesize = { version = "2.7.0", features = ["std"], default-features = false }
 cid = { version = "0.11.3", features = ["std"], default-features = false }
-clap = { version = "4.6.1", features = [
+clap = { version = "4.6.6", features = [
     "color",
     "derive",
     "env",
@@ -45,14 +45,13 @@ clap = { version = "4.6.1", features = [
     "usage",
 ], default-features = false }
 dotenvy = { version = "0.15.7", default-features = false }
-futures-util = { version = "0.3.32", default-features = false }
-humantime = { version = "2.3.0", default-features = false }
-jacquard-axum = { version = "0.12.0", default-features = false, features = [
+futures-util = { version = "0.3.34", default-features = false }
+humantime = { version = "2.4.0", default-features = false }
+jacquard-axum = { version = "0.12.1", default-features = false, features = [
     "tracing",
 ] }
-jacquard-common = {  version = "0.12.0", default-features = false }
-jacquard-identity = { version = "0.12.0", features = ["tracing"] }
-jemallocator = "0.5.4"
+jacquard-common = {  version = "0.12.1", default-features = false }
+jacquard-identity = { version = "0.12.1", features = ["tracing"] }
 porxie-lexgen = { path = "../porxie-lexgen", default-features = false, features = [
     "dev_blooym",
 ] }
@@ -60,7 +59,7 @@ porxie-mediautil = { path = "../porxie-mediautil", default-features = false, fea
     "video-metadata",
     "image-metadata",
 ] }
-moka = { version = "0.12.15", features = [
+moka = { version = "0.12.16", features = [
     "future",
     "logging",
 ], default-features = false }
@@ -80,14 +79,15 @@ reqwest = { version = "0.12.28", default-features = false, features = [
     "zstd",
     "deflate",
 ] }
-serde = { version = "1.0.228", features = [
+serde = { version = "1.0.229", features = [
     "derive",
     "std",
 ], default-features = false }
-serde_json = "1.0.150"
+serde_json = "1.0.151"
 subtle = { version = "2.6.1", default-features = false, features = ["std"] }
-thiserror = { version = "2.0.18", default-features = false, features = ["std"] }
-tokio = { version = "1.52.3", default-features = false, features = [
+thiserror = { version = "2.0.20", default-features = false, features = ["std"] }
+tikv-jemallocator = "0.7.0"
+tokio = { version = "1.53.1", default-features = false, features = [
     "macros",
     "rt-multi-thread",
     "signal",
