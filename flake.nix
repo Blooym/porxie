@@ -27,12 +27,18 @@
         system: pkgs: jacquard-pkgs: {
           default = pkgs.mkShell {
             packages = with pkgs; [
+              # Rust
               rustc
               cargo
               rustfmt
               clippy
+              rust-analyzer
               rust-jemalloc-sys
               jacquard-pkgs.jacquard-lexgen
+
+              # Nix
+              nil
+              nixsd
             ];
             env = {
               RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
