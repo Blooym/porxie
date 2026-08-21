@@ -80,15 +80,15 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1774148364,
-        "narHash": "sha256-5fNkPZtNCnTKQuZe19L7a7sE7pcOwNDfn6WADGSd/s4=",
-        "rev": "dd2e2bbf6bcbfd5e9cf1727bddb828a3f0038802",
-        "revCount": 369,
+        "lastModified": 1782510428,
+        "narHash": "sha256-574aO57ruT9pOuCMx5CiP6sca/wwpdusA09tc0RX2L0=",
+        "rev": "714a5da87d012aca82f48522ea441ca2a49752c2",
+        "revCount": 431,
         "type": "git",
         "url": "https://tangled.org/nonbinary.computer/jacquard"
       },
       "original": {
-        "rev": "dd2e2bbf6bcbfd5e9cf1727bddb828a3f0038802",
+        "rev": "714a5da87d012aca82f48522ea441ca2a49752c2",
         "type": "git",
         "url": "https://tangled.org/nonbinary.computer/jacquard"
       }
