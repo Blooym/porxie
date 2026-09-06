@@ -34,7 +34,7 @@ pub async fn get_blob_handler(
                 return Err((
                     StatusCode::UNPROCESSABLE_ENTITY,
                     [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
-                    Json(XrpcError::Xrpc(GetBlobError::MalformedCid(None))),
+                    Json(XrpcError::Xrpc(GetBlobError::MalformedDid(None))),
                 ));
             }
         },
@@ -44,7 +44,7 @@ pub async fn get_blob_handler(
                 return Err((
                     StatusCode::UNPROCESSABLE_ENTITY,
                     [(header::CACHE_CONTROL, CACHE_CONTROL_NOCACHE_VALUE)],
-                    Json(XrpcError::Xrpc(GetBlobError::MalformedDid(None))),
+                    Json(XrpcError::Xrpc(GetBlobError::MalformedCid(None))),
                 ));
             }
         },
