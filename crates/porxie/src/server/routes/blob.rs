@@ -194,7 +194,7 @@ pub async fn get_blob_handler(
         )
         .header(
             header::CONTENT_DISPOSITION,
-            HeaderValue::from_str(&format!(r#"attachment, filename="{cid}""#))
+            HeaderValue::from_str(&format!(r#"attachment; filename="{cid}""#))
                 .unwrap_or(const { HeaderValue::from_static("attachment") }),
         )
         .body(Body::from(blob.bytes))
