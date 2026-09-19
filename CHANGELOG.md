@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.5] - 2026-09-19
+
+- Updated dependencies to latest versions.
+- Correctly format content-disposition header for get_blob
+- Swap Did and Cid validations errors to the right places
+
 ## [0.3.4] - 2026-07-15
 
 - Updated dependencies to latest versions.
