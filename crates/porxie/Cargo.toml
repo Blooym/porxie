@@ -50,7 +50,7 @@ humantime = { version = "2.4.0", default-features = false }
 jacquard-axum = { version = "0.12.2", default-features = false, features = [
     "tracing",
 ] }
-jacquard-common = {  version = "0.12.2", default-features = false }
+jacquard-common = { version = "0.12.2", default-features = false }
 jacquard-identity = { version = "0.12.2", features = ["tracing"] }
 porxie-lexgen = { path = "../porxie-lexgen", default-features = false, features = [
     "dev_blooym",
@@ -83,11 +83,11 @@ serde = { version = "1.0.229", features = [
     "derive",
     "std",
 ], default-features = false }
-serde_json = "1.0.151"
+serde_json = "1.0.154"
 subtle = { version = "2.6.1", default-features = false, features = ["std"] }
-thiserror = { version = "2.0.20", default-features = false, features = ["std"] }
+thiserror = { version = "2.0.21", default-features = false, features = ["std"] }
 tikv-jemallocator = "0.7.0"
-tokio = { version = "1.53.1", default-features = false, features = [
+tokio = { version = "1.54.0", default-features = false, features = [
     "macros",
     "rt-multi-thread",
     "signal",
