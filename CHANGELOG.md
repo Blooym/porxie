@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.6] - 2026-10-20
+
+- Updated bundled webpki certificates as a security mitigation for compromised CA keys.
+- Updated dependencies to latest versions.
+
 ## [0.3.5] - 2026-09-19
 
 - Updated dependencies to latest versions.
@@ -11,7 +16,7 @@
 - Updated dependencies to latest versions.
 - XRPC subpaths now correctly return `XrpcNotImplemented` on 404.
 - Panics on all endpoints now return an XRPC-compatiable error format instead of just a HTTP status.
-- All other non-supported XRPC methods now return HTTP 405 instead of HTTP 501. 
+- All other non-supported XRPC methods now return HTTP 405 instead of HTTP 501.
 
 ## [0.3.3] - 2026-05-23
 
@@ -59,7 +64,6 @@
 - The configuration flag `--server-auth-token` has been changed to `--server-admin-password`.
 
 - Most endpoints have been migrated to use XRPC.
-
   - [GET] `/:did/:cid` now has an alias endpoint available at `/xrpc/dev.blooym.porxie.getBlob` with the query parameters `?did=did&cid=cid`. The original endpoint remains fully supported for the foreseeable future, and it is the caller's decision of which endpoint is preferred for now.
   - [DELETE] `/cache/:did` has been moved to [POST] `/xrpc/dev.blooym.porxie.cache.purgeActor` with a JSON body containing `{ "did": "did" }`
   - [DELETE] `/cache/:cid` has been moved to [POST] `/xrpc/dev.blooym.porxie.cache.purgeBlob` with a JSON body containing `{ "cid": "cid" }`.
